@@ -1,7 +1,15 @@
 # Project Doppelgänger — Status
 
 ## Current phase
-**Phase 9 — performance pass.** Status: **WAITING** (implemented, tested, awaiting user approval to begin Phase 10).
+**Phase 10 — integration.** Status: IN PROGRESS (Phase 9 approved; character-art generation attempted and paused — see below; backend/memory/workspace scope still needs to be defined with the user before implementation).
+
+## Character art: AI generation attempt (between Phase 9 and 10, 2026-11-21)
+User asked for a timeline on finishing the polished character/outfit art. Answered honestly: procedural Blender scripting (used for the Phase 5 rig) cannot produce sculpted anime-quality art — that gap can only be closed by (a) an AI 3D generator, (b) a human 3D artist, or (c) a licensed/purchased asset. User chose (a) as a first step.
+
+- Blender MCP's `generators` status had changed since the Phase 0 audit: `tripo` and `hyper3d` are now **on** (both were off in Phase 0) — the user enabled them independently between sessions.
+- Learned a real constraint from `generate_3d`'s own tool description before spending anything: it makes **one fused object per call** (no separable body+clothing layers, no rig, no shape keys), and each call can cost real money or a generation credit. This means the eventual plan is one generated mesh per *complete outfit* (body+clothes together), not a shared nude base body with swappable clothing — generating a "nude base" would also be inappropriate to prompt for. Re-rigging and re-adding shape keys to each generated mesh remains manual work regardless of generator quality.
+- Ran one test generation (prompt matching spec §2's design direction: adult 25+, silver-white hair, lavender-blue eyes, Cyber Elegance outfit, T-pose) via **Tripo** → failed: `insufficient credit`. Tried the same test via **Hyper3D** → failed: `API_INSUFFICIENT_FUNDS`. Neither call created anything or incurred charge (both failed before task creation).
+- User decided: pause the art-generation path, continue with functional phases. Add credit to Tripo or Hyper3D whenever convenient, then ask to retry the single test generation — not a blocker for Phase 10+.
 
 ## Provider decision for Phase 8 (confirmed with user before starting)
 Asked the user to choose between: (a) the browser-native Web Speech API (free, no backend, works today, but inconsistent cross-browser support and Chrome sends audio to Google's servers for recognition), (b) building the pipeline with the provider stubbed out, or (c) holding for a paid cloud provider + the backend server needed to keep its API key off the frontend. They chose (a). Everything below uses Web Speech API (`SpeechRecognition` + `SpeechSynthesis`) as the live adapter implementation, with the Chrome/Google privacy caveat disclosed directly in Character Settings, not buried.
