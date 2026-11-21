@@ -217,7 +217,7 @@ export function CompanionScreen({ profile, isActiveScreen }: CompanionScreenProp
         <span className="hud-corner br" />
         <div className="hud-scanline" aria-hidden="true" />
         <div className="hud-telemetry hud-mono">
-          <span>ASSET: astra_v001.glb</span>
+          <span>ASSET: astra_v002.glb</span>
           <span>STATE: {STATE_LABELS[state]}</span>
           {hoveredZoneLabel && <span>ZONE: {hoveredZoneLabel.toUpperCase()}</span>}
           {voiceInput.isListening && <span className="hud-mic-indicator">● MIC ACTIVE</span>}

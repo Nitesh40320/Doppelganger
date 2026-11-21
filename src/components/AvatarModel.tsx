@@ -5,7 +5,7 @@ import * as THREE from 'three'
 import { INTERACTION_ZONES, type ZoneId } from '../types/interactionZones'
 import type { CompanionState } from '../types/companionState'
 
-const MODEL_URL = new URL('../assets/avatar/models/astra_v001.glb', import.meta.url).href
+const MODEL_URL = new URL('../assets/avatar/models/astra_v002.glb', import.meta.url).href
 
 /** Restrained, in-palette glow cue per animation state — layered on top of
  * the real P0 clips below (Phase 5). Real facial micro-expression is still
