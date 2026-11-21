@@ -1,4 +1,4 @@
-import { Suspense, useState } from 'react'
+import { Suspense } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { Loader, OrbitControls } from '@react-three/drei'
 import { AvatarModel } from './AvatarModel'
@@ -11,15 +11,14 @@ function ViewportError() {
     <div className="viewport-status-overlay viewport-error">
       <span className="hud-mono">MODEL LOAD FAILED</span>
       <span className="field-hint">
-        Could not load the test asset. The avatar stage stays in placeholder mode; nothing
-        else in the app is affected.
+        Could not load the character asset. The avatar stage stays in placeholder mode;
+        nothing else in the app is affected.
       </span>
     </div>
   )
 }
 
 interface AvatarViewportProps {
-  cursorGazeEnabled: boolean
   touchIntensity: number
   companionState: CompanionState
   reactionZoneId: ZoneId | null
@@ -29,7 +28,6 @@ interface AvatarViewportProps {
 }
 
 export function AvatarViewport({
-  cursorGazeEnabled,
   touchIntensity,
   companionState,
   reactionZoneId,
@@ -37,18 +35,12 @@ export function AvatarViewport({
   onZoneHover,
   onStageHoverChange,
 }: AvatarViewportProps) {
-  const [isPointerInStage, setIsPointerInStage] = useState(false)
-
   return (
     <ViewportErrorBoundary fallback={<ViewportError />}>
       <div
         className="avatar-canvas-wrap"
-        onPointerEnter={() => {
-          setIsPointerInStage(true)
-          onStageHoverChange(true)
-        }}
+        onPointerEnter={() => onStageHoverChange(true)}
         onPointerLeave={() => {
-          setIsPointerInStage(false)
           onZoneHover(null)
           onStageHoverChange(false)
         }}
@@ -64,8 +56,6 @@ export function AvatarViewport({
           <directionalLight position={[-2, 1, -2]} intensity={0.35} color="#4fd8e8" />
           <Suspense fallback={null}>
             <AvatarModel
-              cursorGazeEnabled={cursorGazeEnabled}
-              isPointerInStage={isPointerInStage}
               touchIntensity={touchIntensity}
               companionState={companionState}
               reactionZoneId={reactionZoneId}

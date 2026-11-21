@@ -103,7 +103,7 @@ export function CompanionScreen({ profile }: { profile: CharacterProfile }) {
     statusLine = 'Safe mode: something in the simulated pipeline failed. The companion stays visible and usable.'
   } else {
     statusLine =
-      'This is a placeholder test figure verifying the animation state machine (Phase 4). The real character and real animation clips arrive in Phase 5. Keyboard chat and voice are not implemented yet (Phases 7–8).'
+      'This is the real rigged character with her first animation clips (Phase 5) — base body, default Cyber Elegance outfit, and basic facial shape keys. Final sculpted art, more outfits, and richer expressions are later passes. Keyboard chat and voice are not implemented yet (Phases 7–8).'
   }
 
   return (
@@ -115,12 +115,11 @@ export function CompanionScreen({ profile }: { profile: CharacterProfile }) {
         <span className="hud-corner br" />
         <div className="hud-scanline" aria-hidden="true" />
         <div className="hud-telemetry hud-mono">
-          <span>ASSET: placeholder_hologram_v001.glb</span>
+          <span>ASSET: astra_v001.glb</span>
           <span>STATE: {STATE_LABELS[state]}</span>
           {hoveredZoneLabel && <span>ZONE: {hoveredZoneLabel.toUpperCase()}</span>}
         </div>
         <AvatarViewport
-          cursorGazeEnabled={profile.cursorGaze}
           touchIntensity={profile.touchIntensity}
           companionState={state}
           reactionZoneId={reactionZone}

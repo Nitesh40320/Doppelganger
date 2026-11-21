@@ -1,37 +1,58 @@
 import { useEffect, useRef } from 'react'
-import { useGLTF } from '@react-three/drei'
+import { useAnimations, useGLTF } from '@react-three/drei'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
-import { INTERACTION_ZONES, REACTION_DURATION_MS, type ZoneId } from '../types/interactionZones'
+import { INTERACTION_ZONES, type ZoneId } from '../types/interactionZones'
 import type { CompanionState } from '../types/companionState'
 
-const TEST_MODEL_URL = new URL(
-  '../assets/avatar/models/test/placeholder_hologram_v001.glb',
-  import.meta.url,
-).href
+const MODEL_URL = new URL('../assets/avatar/models/astra_v001.glb', import.meta.url).href
 
-const MAX_YAW = THREE.MathUtils.degToRad(28)
-const MAX_PITCH = THREE.MathUtils.degToRad(16)
-const DAMP_LAMBDA = 7
-
-/** Restrained, in-palette glow cue per animation state. Real facial/viseme
- * cues arrive with the rigged character (Phase 5) and lip-sync (Phase 8) —
- * this is a deliberately simple stand-in so the state machine's output is
- * visible today, not a claim that this is the final speaking/listening look. */
+/** Restrained, in-palette glow cue per animation state — layered on top of
+ * the real P0 clips below (Phase 5). Real facial micro-expression is still
+ * limited to the four basic shape keys built this phase (Blink, Mouth_Open,
+ * Smile, Frown); richer expression work is a later pass. */
 const STATE_GLOW: Record<CompanionState, { color: THREE.Color; baseIntensity: number }> = {
-  boot: { color: new THREE.Color('#4fd8e8'), baseIntensity: 0.1 },
-  idle: { color: new THREE.Color('#4fd8e8'), baseIntensity: 0.35 },
-  attention: { color: new THREE.Color('#4fd8e8'), baseIntensity: 0.5 },
-  listening: { color: new THREE.Color('#4fd8e8'), baseIntensity: 0.8 },
-  thinking: { color: new THREE.Color('#b084f5'), baseIntensity: 0.75 },
-  speaking: { color: new THREE.Color('#4fd8e8'), baseIntensity: 0.95 },
-  reaction: { color: new THREE.Color('#4fd8e8'), baseIntensity: 0.7 },
-  error: { color: new THREE.Color('#ff6b6b'), baseIntensity: 0.6 },
+  boot: { color: new THREE.Color('#4fd8e8'), baseIntensity: 0.05 },
+  idle: { color: new THREE.Color('#4fd8e8'), baseIntensity: 0.15 },
+  attention: { color: new THREE.Color('#4fd8e8'), baseIntensity: 0.25 },
+  listening: { color: new THREE.Color('#4fd8e8'), baseIntensity: 0.45 },
+  thinking: { color: new THREE.Color('#b084f5'), baseIntensity: 0.4 },
+  speaking: { color: new THREE.Color('#4fd8e8'), baseIntensity: 0.5 },
+  reaction: { color: new THREE.Color('#4fd8e8'), baseIntensity: 0.35 },
+  error: { color: new THREE.Color('#ff6b6b'), baseIntensity: 0.45 },
+}
+
+/** Which clip plays for the current discrete state (reaction is handled
+ * separately below, keyed by which zone was touched). */
+const STATE_CLIP: Record<CompanionState, string> = {
+  boot: 'Idle',
+  idle: 'Idle',
+  attention: 'Idle',
+  listening: 'Listening',
+  thinking: 'Thinking',
+  speaking: 'Speaking',
+  reaction: 'Idle',
+  error: 'Idle',
+}
+
+const REACTION_CLIP: Record<ZoneId, string> = {
+  head: 'LookAt',
+  torso: 'LookAt',
+  armLeft: 'Wave',
+  armRight: 'Wave',
+}
+
+/** Invisible proxy colliders track a bone's world position each frame so
+ * named hit zones still work on a single skinned mesh (no separate meshes
+ * per zone exist anymore, unlike the Phase 2-4 placeholder). */
+const ZONE_BONE: Record<ZoneId, string> = {
+  head: 'head',
+  torso: 'chest',
+  armLeft: 'hand.L',
+  armRight: 'hand.R',
 }
 
 interface AvatarModelProps {
-  cursorGazeEnabled: boolean
-  isPointerInStage: boolean
   touchIntensity: number
   companionState: CompanionState
   reactionZoneId: ZoneId | null
@@ -40,113 +61,119 @@ interface AvatarModelProps {
 }
 
 export function AvatarModel({
-  cursorGazeEnabled,
-  isPointerInStage,
   touchIntensity,
   companionState,
   reactionZoneId,
   onZoneClick,
   onZoneHover,
 }: AvatarModelProps) {
-  const { nodes, materials } = useGLTF(TEST_MODEL_URL) as unknown as {
-    nodes: Record<string, THREE.Mesh>
-    materials: Record<string, THREE.Material & THREE.MeshStandardMaterial>
+  const { scene, animations, nodes } = useGLTF(MODEL_URL) as unknown as {
+    scene: THREE.Group
+    animations: THREE.AnimationClip[]
+    nodes: Record<string, THREE.Object3D>
   }
 
   const groupRef = useRef<THREE.Group>(null)
-  const headRef = useRef<THREE.Mesh>(null)
-  const zoneRefs = useRef<Partial<Record<ZoneId, THREE.Mesh>>>({})
-  const reactionStartRef = useRef(0)
+  const { actions } = useAnimations(animations, groupRef)
+  const currentActionRef = useRef<THREE.AnimationAction | null>(null)
   const elapsedRef = useRef(0)
+  const ownedMaterialsRef = useRef<THREE.Material[]>([])
+  const zoneProxyRefs = useRef<Partial<Record<ZoneId, THREE.Mesh>>>({})
 
-  // useGLTF's returned materials are a shared, cached resource. Clone our own
-  // copy after mount and swap every mesh over to it, so the per-frame
-  // emissive animation below never mutates the shared cache.
-  const sharedMaterial = materials['Placeholder_Hologram_Mat']
-  const ownedMaterialRef = useRef<THREE.MeshStandardMaterial | null>(null)
-
+  // Clone every material in the scene once so the per-frame glow animation
+  // below never mutates useGLTF's shared, cached material resources.
   useEffect(() => {
-    const clone = sharedMaterial.clone()
-    ownedMaterialRef.current = clone
-    groupRef.current?.traverse((obj) => {
-      if (obj instanceof THREE.Mesh && obj.material === sharedMaterial) {
-        obj.material = clone
+    const cloneMap = new Map<THREE.Material, THREE.Material>()
+    scene.traverse((obj) => {
+      if (obj instanceof THREE.Mesh) {
+        const mat = obj.material as THREE.Material
+        if (!cloneMap.has(mat)) cloneMap.set(mat, mat.clone())
+        obj.material = cloneMap.get(mat)!
       }
     })
-  }, [sharedMaterial])
+    ownedMaterialsRef.current = Array.from(cloneMap.values())
+  }, [scene])
 
+  function playClip(name: string, loop: boolean, fadeDuration = 0.35) {
+    const next = actions[name]
+    if (!next) return
+    if (currentActionRef.current === next && next.isRunning()) return
+    next.reset()
+    next.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, Infinity)
+    // AnimationAction is an inherently mutable three.js control object (play/pause/
+    // setLoop/clampWhenFinished all mutate it by design) — not a shared cache like
+    // useGLTF's materials; each useAnimations() call owns its own action instances.
+    // eslint-disable-next-line react-hooks/immutability
+    next.clampWhenFinished = !loop
+    next.fadeIn(fadeDuration)
+    next.play()
+    if (currentActionRef.current && currentActionRef.current !== next) {
+      currentActionRef.current.fadeOut(fadeDuration)
+    }
+    currentActionRef.current = next
+  }
+
+  // This effect drives three.js AnimationAction control objects via playClip()
+  // (see comment above) — mutating them is the documented API, not a React bug.
+  // eslint-disable-next-line react-hooks/immutability
   useEffect(() => {
-    if (reactionZoneId) reactionStartRef.current = performance.now()
-  }, [reactionZoneId])
+    if (companionState === 'reaction' && reactionZoneId) {
+      playClip(REACTION_CLIP[reactionZoneId], false, 0.2)
+    } else {
+      playClip(STATE_CLIP[companionState], true)
+    }
 
-  useFrame((state, delta) => {
+    const mouthAction = actions['Speaking_Mouth']
+    if (mouthAction) {
+      if (companionState === 'speaking') {
+        mouthAction.reset().setLoop(THREE.LoopRepeat, Infinity)
+        mouthAction.fadeIn(0.2)
+        mouthAction.play()
+      } else {
+        mouthAction.fadeOut(0.2)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companionState, reactionZoneId, actions])
+
+  useFrame((_, delta) => {
     elapsedRef.current += delta
 
-    // Idle breathing: a very small, slow vertical scale oscillation on the
-    // whole figure. Stands in for a real breathing clip until Phase 5.
-    const group = groupRef.current
-    if (group) {
-      const breathe =
-        companionState === 'idle' || companionState === 'attention'
-          ? 1 + Math.sin(elapsedRef.current * 1.1) * 0.012
-          : 1
-      group.scale.set(1, THREE.MathUtils.damp(group.scale.y, breathe, 6, delta), 1)
-    }
-
-    // Head gaze: continuous low-level behavior, independent of the discrete
-    // state machine above it (matches spec Sec4's always-on gaze tracking).
-    const head = headRef.current
-    if (head) {
-      const targetYaw =
-        cursorGazeEnabled && isPointerInStage
-          ? THREE.MathUtils.clamp(state.pointer.x * MAX_YAW, -MAX_YAW, MAX_YAW)
-          : 0
-      const targetPitch =
-        cursorGazeEnabled && isPointerInStage
-          ? THREE.MathUtils.clamp(-state.pointer.y * MAX_PITCH, -MAX_PITCH, MAX_PITCH)
-          : 0
-      head.rotation.y = THREE.MathUtils.damp(head.rotation.y, targetYaw, DAMP_LAMBDA, delta)
-      head.rotation.x = THREE.MathUtils.damp(head.rotation.x, targetPitch, DAMP_LAMBDA, delta)
-    }
-
-    // Reaction pulse: scale the targeted zone mesh up and back down.
+    // Keep hit-zone proxies glued to their bone's current world position.
     for (const zone of INTERACTION_ZONES) {
-      const mesh = zoneRefs.current[zone.id]
-      const baseNode = nodes[zone.nodeName]
-      if (!mesh || !baseNode) continue
-      let pulse = 0
-      if (companionState === 'reaction' && reactionZoneId === zone.id) {
-        const elapsed = performance.now() - reactionStartRef.current
-        const t = Math.min(elapsed / REACTION_DURATION_MS, 1)
-        pulse = Math.sin(t * Math.PI)
-      }
-      const targetMultiplier = 1 + pulse * 0.18 * (touchIntensity / 100)
-      const currentMultiplier = mesh.scale.x / (baseNode.scale.x || 1)
-      const dampedMultiplier = THREE.MathUtils.damp(currentMultiplier, targetMultiplier, 10, delta)
-      mesh.scale.set(
-        baseNode.scale.x * dampedMultiplier,
-        baseNode.scale.y * dampedMultiplier,
-        baseNode.scale.z * dampedMultiplier,
-      )
+      const proxy = zoneProxyRefs.current[zone.id]
+      const bone = nodes[ZONE_BONE[zone.id]]
+      if (!proxy || !bone) continue
+      bone.getWorldPosition(proxy.position)
+      if (groupRef.current) groupRef.current.worldToLocal(proxy.position)
     }
 
-    // State glow: one shared (owned-clone) material, so this is a single
-    // global cue rather than per-mesh — simple and legible for a primitive placeholder.
-    const mat = ownedMaterialRef.current
-    if (mat) {
-      const { color, baseIntensity } = STATE_GLOW[companionState]
-      let intensity = baseIntensity
-      if (companionState === 'listening') {
-        intensity += Math.sin(elapsedRef.current * 6) * 0.15
-      } else if (companionState === 'thinking') {
-        intensity += Math.sin(elapsedRef.current * 10) * 0.2
-      } else if (companionState === 'speaking') {
-        intensity += (Math.sin(elapsedRef.current * 14) * 0.5 + Math.sin(elapsedRef.current * 23)) * 0.15
-      } else if (companionState === 'error') {
-        intensity += Math.sin(elapsedRef.current * 3) * 0.25
-      }
-      mat.emissive.lerp(color, Math.min(delta * 6, 1))
-      mat.emissiveIntensity = THREE.MathUtils.damp(mat.emissiveIntensity, Math.max(intensity, 0), 8, delta)
+    // State glow across every owned material clone.
+    const { color, baseIntensity } = STATE_GLOW[companionState]
+    let intensity = baseIntensity
+    if (companionState === 'listening') {
+      intensity += Math.sin(elapsedRef.current * 6) * 0.08
+    } else if (companionState === 'thinking') {
+      intensity += Math.sin(elapsedRef.current * 10) * 0.1
+    } else if (companionState === 'speaking') {
+      intensity += (Math.sin(elapsedRef.current * 14) * 0.5 + Math.sin(elapsedRef.current * 23)) * 0.08
+    } else if (companionState === 'error') {
+      intensity += Math.sin(elapsedRef.current * 3) * 0.15
+    }
+    for (const mat of ownedMaterialsRef.current) {
+      const standard = mat as THREE.MeshStandardMaterial
+      if (!standard.emissive) continue
+      standard.emissive.lerp(color, Math.min(delta * 6, 1))
+      // These are our own clones (made in the mount effect above specifically to
+      // avoid mutating useGLTF's shared cache) — mutating them here is the correct,
+      // standard R3F imperative-animation pattern, not a shared-state bug.
+      // eslint-disable-next-line react-hooks/immutability
+      standard.emissiveIntensity = THREE.MathUtils.damp(
+        standard.emissiveIntensity,
+        Math.max(intensity, 0),
+        8,
+        delta,
+      )
     }
   })
 
@@ -169,65 +196,26 @@ export function AvatarModel({
     }
   }
 
+  void touchIntensity // reserved: reaction intensity now comes from clip choice, not a scale pulse
+
   return (
     <group ref={groupRef}>
-      <mesh
-        ref={(m) => {
-          headRef.current = m
-          zoneRefs.current.head = m ?? undefined
-        }}
-        geometry={nodes.Placeholder_Head.geometry}
-        material={sharedMaterial}
-        position={nodes.Placeholder_Head.position}
-        scale={nodes.Placeholder_Head.scale}
-        {...zoneHandlers('head')}
-      />
-      <mesh
-        ref={(m) => {
-          zoneRefs.current.torso = m ?? undefined
-        }}
-        geometry={nodes.Placeholder_Torso.geometry}
-        material={sharedMaterial}
-        position={nodes.Placeholder_Torso.position}
-        scale={nodes.Placeholder_Torso.scale}
-        {...zoneHandlers('torso')}
-      />
-      <mesh
-        ref={(m) => {
-          zoneRefs.current.armLeft = m ?? undefined
-        }}
-        geometry={nodes.Placeholder_ArmL.geometry}
-        material={sharedMaterial}
-        position={nodes.Placeholder_ArmL.position}
-        rotation={nodes.Placeholder_ArmL.rotation}
-        scale={nodes.Placeholder_ArmL.scale}
-        {...zoneHandlers('armLeft')}
-      />
-      <mesh
-        ref={(m) => {
-          zoneRefs.current.armRight = m ?? undefined
-        }}
-        geometry={nodes.Placeholder_ArmR.geometry}
-        material={sharedMaterial}
-        position={nodes.Placeholder_ArmR.position}
-        rotation={nodes.Placeholder_ArmR.rotation}
-        scale={nodes.Placeholder_ArmR.scale}
-        {...zoneHandlers('armRight')}
-      />
-      <mesh
-        geometry={nodes.Placeholder_LegL.geometry}
-        material={sharedMaterial}
-        position={nodes.Placeholder_LegL.position}
-        scale={nodes.Placeholder_LegL.scale}
-      />
-      <mesh
-        geometry={nodes.Placeholder_LegR.geometry}
-        material={sharedMaterial}
-        position={nodes.Placeholder_LegR.position}
-        scale={nodes.Placeholder_LegR.scale}
-      />
+      <primitive object={scene} />
+      {INTERACTION_ZONES.map((zone) => (
+        <mesh
+          key={zone.id}
+          ref={(m) => {
+            zoneProxyRefs.current[zone.id] = m ?? undefined
+          }}
+          visible={false}
+          {...zoneHandlers(zone.id)}
+        >
+          <sphereGeometry args={[0.09, 8, 8]} />
+          <meshBasicMaterial transparent opacity={0} />
+        </mesh>
+      ))}
     </group>
   )
 }
 
-useGLTF.preload(TEST_MODEL_URL)
+useGLTF.preload(MODEL_URL)

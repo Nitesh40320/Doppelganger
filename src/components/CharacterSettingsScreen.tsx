@@ -92,7 +92,9 @@ export function CharacterSettingsScreen({
             onChange={(e) => onChange({ cursorGaze: e.target.checked })}
           />
           <span className="field-hint">
-            Head tracks your cursor when it's over the companion stage (Phase 3).
+            Temporarily paused: the real rigged character's baked animation clips (Phase 5)
+            now drive head movement, and layering live cursor-follow on top without fighting
+            those clips needs additive animation blending — planned for a later pass.
           </span>
         </label>
 

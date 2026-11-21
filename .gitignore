@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Blender auto-backup files
+*.blend1
+*.blend2
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

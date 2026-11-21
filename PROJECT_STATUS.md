@@ -1,14 +1,22 @@
 # Project Doppelgänger — Status
 
 ## Current phase
-**Phase 4 — animation controller.** Status: **WAITING** (implemented, tested, awaiting user approval to begin Phase 5).
+**Phase 5 — real character asset.** Status: **WAITING** (implemented, tested, awaiting user approval to begin Phase 6).
+
+## Scope decision for Phase 5 (confirmed with user before starting)
+A fully sculpted, production-quality adult anime face/body — the "high-quality 3D anime
+realism" in the spec's product vision — is not achievable through procedural Blender Python
+scripting; that level of topology and facial detail is normally hand-sculpted by a 3D artist.
+Asked the user how to proceed; they chose: build a clean, correctly-rigged, functional
+humanoid now (satisfies Phase 5's technical pipeline criteria), and treat final visual
+polish/sculpting as a separate later effort (human artist, licensed asset, or AI generation
+once enabled and approved). Everything below was built to that explicit, agreed scope —
+it is deliberately basic-looking, not a stand-in for final art.
 
 ## User-approved future direction (not yet built)
 User shared a reference image (`Astra's Neon AI Companion Interface.png`) as the target look for the **final product**, and confirmed two things explicitly:
 1. **UI chrome/panel language**: floating glass HUD panels (profile card, quick-actions grid, memory graph, task tracker, wardrobe carousel, system monitor, bottom command bar, chat/mic composer) — adopt this as the target design system as more features land (mainly Phase 4 onward, fully assembled by Phase 9–10).
 2. **Character design modesty level** (Phase 5–6, explicitly not yet started): user chose "match the reference closely" when asked, meaning Astra's actual outfits/proportions should trend toward that reference's style and coverage level rather than the more conservative "Cyber Elegance" sketch in the spec's wardrobe table. This **does not** relax the spec's separate, explicit behavioral rule that pointer/touch reactions stay non-explicit and that physical interaction is never treated as consent for intimate behavior (spec §4) — that constraint stays in place regardless of outfit design and is not being revisited.
-
-## Completed tasks (Phase 0)
 
 ## Completed tasks (Phase 0)
 - Read `Project_Doppelganger_Claude_Implementation_Spec.docx` in full.
@@ -81,8 +89,39 @@ None outstanding. (One real state-management bug — reaction never clearing —
 ## Known errors (Phase 4)
 None outstanding. (Three real lint-surfaced bugs found and fixed — see above.)
 
+## Completed tasks (Phase 5)
+- **Body:** built in Blender via MCP as overlapping capsule-shaped primitives (spheres at joints, tapered cylinders between them) joined into a single mesh — a more controllable technique than Blender's Skin modifier, which was tried first and abandoned after it produced bad topology at the high-valence chest joint (see "debugging notes" below). ~1.72m standing proportions, slight anime-style jaw taper via a crude vertex-region squash. One PBR skin material.
+- **Skeleton:** a 21-bone armature (spine chain, both arms to the hand, both legs to the toe) matching the same joint layout as the body. Body parented with automatic weights. **Tested exactly as spec §11 requires**: posed shoulders, elbows, hips, knees, and neck in Blender and confirmed the mesh deforms without tearing, then reset to rest pose.
+- **Facial shape keys:** Blink, Mouth_Open, Smile, Frown — crude vertex-region deformations (no real eye/mouth topology exists on this base mesh, so these are honestly basic, not final facial animation). Verified each has a non-trivial vertex count and the morph target data exports correctly.
+- **Default outfit (Cyber Elegance):** a fitted "top" (hips→chest→shoulders) and "boots" (ankle→knee), built the same capsule way, each a separate object with its own material, both parented to the same armature with automatic weights — matching the spec's wardrobe architecture (separate swappable clothing meshes, same body/rig).
+- **P0 animation clips:** Idle, Listening, Thinking, Speaking, Wave, LookAt — named Blender Actions with bone keyframes (1 second each at the default 24fps), plus a separate `Speaking_Mouth` shape-key action driving `Mouth_Open` during speech.
+- **Versioned source retained:** `assets/avatar/models/astra_v001.blend` (2.1 MB, outside `src/` so Vite doesn't watch/process a large binary). Exported `src/assets/avatar/models/astra_v001.glb` (950 KB) with `export_animation_mode='ACTIONS'` so every action becomes its own named glTF animation clip.
+- **App integration:** rewrote `AvatarModel.tsx` to load the real skinned/rigged/animated GLB via `useGLTF` + drei's `useAnimations`, replacing the Phase 2–4 static placeholder entirely. The animation-state-machine states (Phase 4) now play the matching *real* clip with crossfading instead of the old procedural scale-pulse/breathing stand-ins. Hit zones (head/torso/hand.L/hand.R) are now invisible proxy colliders that track each bone's live world position every frame, since the real character is one continuous skinned mesh rather than separate named meshes per zone like the old placeholder.
+- **Known, disclosed regression:** continuous cursor-gaze head-follow (Phase 3) is temporarily disabled. Directly rotating the head bone would fight the real baked clips that now also drive it; doing this properly needs additive animation-layer blending, which is more work than this phase's scope. The Character Settings hint text for "Cursor gaze" was updated to say so honestly rather than leave a toggle that silently does nothing unexplained.
+- The old Phase 2 test placeholder (`src/assets/avatar/models/test/placeholder_hologram_v001.glb`) is now unused/orphaned since nothing imports it anymore. Left in place rather than deleted, per the project's file-safety rule — the user can remove it whenever convenient.
+
+## Debugging notes from Phase 5 (for future reference, not current defects)
+- Blender's Skin modifier produced visibly broken geometry (an arm looping up over the head) at a 4-way bone junction (the chest, which connects to both shoulders, the neck, and the spine) — a known category of issue with that modifier at high-valence vertices. Abandoned in favor of the overlapping-capsule-primitives technique, which gave full, predictable control.
+- Spent real time chasing what looked like an asymmetric-arm bug after that pivot, visible across several screenshots from different angles. Rigorously verified with hard numbers three separate times (joint positions, reconstructed cylinder endpoints from their transforms, and direct mesh vertex-region comparison between both arms) — all three checks came back perfectly symmetric. It was a visual misread of a small, low-sample (16-sample EEVEE quick preview), ambiguous-angle render, not a real defect. Lesson applied: verify 3D geometry questions numerically, not by eye, when the two disagree.
+
+## Tests actually run and results (Phase 5)
+- `npx tsc -b` → clean.
+- `npx eslint .` → three real issues found with the same `react-hooks/immutability` family of rules as Phase 4; this time, after inspection, they were **not** bugs (unlike Phase 4's genuine shared-material mutation) — `THREE.AnimationAction` is an inherently mutable three.js control object by design, and the "owned materials" being mutated were already our own clones (made specifically to avoid the Phase-4-style shared-cache problem). Added narrow, commented `eslint-disable` lines explaining why, rather than mis-architecting correct code around a lint heuristic that doesn't model three.js's imperative-object API.
+- `npm run build` → succeeds (950 KB GLB now bundled; same pre-existing large-JS-chunk warning, still deferred to Phase 9).
+- Parsed the exported GLB's JSON chunk directly (Node) before touching any app code, to verify the Blender→GLB pipeline actually produced what it claimed: confirmed all 7 animations present and correctly named, a skin with 22 joints, 4 morph targets (Blink/Mouth_Open/Smile/Frown) on the body mesh, and all 3 materials present. Also confirmed every clip is exactly 1.00s, which is why `REACTION_DURATION_MS`/`REACTION_COOLDOWN_MS` were retuned from Phase 3/4's 550ms/650ms to 1000ms/1050ms to match.
+- Live Playwright verification against `npm run dev`, zero console errors throughout:
+  - Real character loads and renders (smooth continuous mesh, clear visual improvement over the Phase 2–4 placeholder).
+  - Clicking a hand zone plays the real "Wave" clip (not a scale-pulse) and status text updates correctly; state returns to IDLE automatically once the clip's duration elapses.
+  - Full simulated conversation turn (IDLE → LISTENING → THINKING → SPEAKING) confirmed driving the matching real clips in sequence.
+  - Force error / Recover to idle still work correctly with the new rig.
+  - Character Settings' "Cursor gaze" hint text correctly shows the new honest "temporarily paused" explanation.
+  - Dev server and test screenshots cleaned up after verification; restored the Cube's viewport visibility in the live Blender session (hidden temporarily, for my own debugging, now reverted) and re-saved `astra_v001.blend`.
+
+## Known errors (Phase 5)
+None outstanding.
+
 ## Decisions awaiting user approval
-- Approval to proceed to Phase 5 (Blender rig, facial shape keys, default outfit, P0 animation clips, exported to GLB — the first phase that touches the *real* character asset).
+- Approval to proceed to Phase 6 (Wardrobe: the Cyber Elegance outfit built this phase becomes the first entry in a real outfit-selection framework; additional outfits from spec §3 come later).
 - No other blocking decisions currently.
 
 ## Approved design/architecture decisions
@@ -105,5 +144,10 @@ None outstanding. (Three real lint-surfaced bugs found and fixed — see above.)
 - Modified: `src/components/AvatarModel.tsx` (state-driven glow + breathing + owned-material clone fix), `src/components/AvatarViewport.tsx` (`companionState`/`reactionZoneId` props replacing the old `activeReaction` prop, new `onStageHoverChange` callback), `src/components/CompanionScreen.tsx` (state machine wiring, per-state status text, dev test panel), `src/App.css` (dev panel styling), `PROJECT_STATUS.md`.
 - Deleted: `src/hooks/useAvatarReactions.ts` — Phase 3's standalone reaction/cooldown hook, superseded by the unified state machine (its job is now done by the machine's own "can't re-enter the current state" rule). This is code I wrote in the previous phase of this same session, not user content; flagging it here per the project's "never delete without approval" rule even though it's a low-risk, git-tracked, same-session refactor.
 
+## Files created or modified (Phase 5)
+- Created: `assets/avatar/models/astra_v001.blend` (Blender source, project root, outside `src/`), `src/assets/avatar/models/astra_v001.glb` (exported character asset).
+- Modified: `src/components/AvatarModel.tsx` (rewritten to load the real rig/clips instead of the placeholder), `src/components/AvatarViewport.tsx` (dropped the now-removed `cursorGazeEnabled`/`isPointerInStage` props), `src/components/CompanionScreen.tsx` (updated telemetry/status copy for the real asset), `src/components/CharacterSettingsScreen.tsx` (honest "Cursor gaze" hint update), `src/types/interactionZones.ts` (dropped the placeholder-only `nodeName` field, retuned reaction timing to match real clip length), `PROJECT_STATUS.md`.
+- No files deleted from the web app; the orphaned Phase 2 placeholder GLB was left in place (see above).
+
 ## Exact next action (requires approval before starting)
-Phase 5 — Blender rig, facial shape keys, default Cyber Elegance outfit, P0 animation clips, exported to GLB, per spec §11 and §14. Not started.
+Phase 6 — Wardrobe: build a real outfit-selection framework around the Cyber Elegance top/boots from this phase (spec §3 and §14). Not started.
