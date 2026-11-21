@@ -1,7 +1,7 @@
 # Project Doppelgänger — Status
 
 ## Current phase
-**Phase 5 — real character asset.** Status: **WAITING** (implemented, tested, awaiting user approval to begin Phase 6).
+**Phase 6 — wardrobe.** Status: **WAITING** (implemented, tested, awaiting user approval to begin Phase 7).
 
 ## Scope decision for Phase 5 (confirmed with user before starting)
 A fully sculpted, production-quality adult anime face/body — the "high-quality 3D anime
@@ -120,8 +120,29 @@ None outstanding. (Three real lint-surfaced bugs found and fixed — see above.)
 ## Known errors (Phase 5)
 None outstanding.
 
+## Completed tasks (Phase 6)
+- **Fixed a real architectural bug found while scoping this phase**: navigating between screens (e.g. Companion → Character Settings → Companion) was unmounting `CompanionScreen` entirely, resetting the Phase 4 animation state machine back to `BOOT` and reloading the whole 3D scene. This directly violated Phase 6's own acceptance criterion ("changing outfit... does not reset chat/state") and the spec's explicit "avoid rebuilding or reloading the whole avatar" rule (§3), so it had to be fixed before the Wardrobe screen could mean anything. Fixed in `App.tsx`: the Companion screen is now always mounted, hidden via CSS (`display: none`) rather than conditionally unmounted, while Settings/Wardrobe still mount/unmount normally (they have no expensive state to lose).
+- **Outfit data + Wardrobe screen**: `src/types/outfits.ts` lists all six outfits from spec §3's wardrobe table. Only Cyber Elegance (built in Phase 5) is marked available; the other five are shown but clearly labeled "SOON — Meshes not modeled yet" with no select control at all, per the spec's explicit rule not to promise outfit changes before the meshes exist.
+- Enabled the previously-disabled "Wardrobe" nav item. Selecting an outfit writes to the same `characterProfile.selectedOutfit` field and `localStorage` persistence Phase 1 already built — no new persistence code needed.
+- Updated the Character Settings "Selected outfit" hint to point at the new Wardrobe screen instead of saying "arrives in Phase 6" (it has).
+
+## Tests actually run and results (Phase 6)
+- `npx tsc -b` / `npx eslint .` → clean.
+- `npm run build` → succeeds (same pre-existing bundle-size warning, deferred to Phase 9).
+- Live Playwright verification against `npm run dev`:
+  - **Proved the mount-persistence fix with hard evidence, not assumption**: added temporary debug logging (a mount/unmount log, then a per-state-change timestamp log) and confirmed zero additional mounts of `CompanionScreen` occur across Wardrobe/Settings/Companion navigation — the only mount/unmount pair observed was React 19 StrictMode's deliberate double-invoke on initial page load, confirmed to happen identically on a fresh `page.goto()` (not an HMR artifact). Removed the debug logging afterward; `git diff` confirmed the file was left byte-identical to before.
+  - **A real test-methodology mistake, caught and corrected in-session**: an early timing-based check made it look like navigating away during an active "reaction" animation reset it after only ~150ms (should last 1000ms) — timestamped logging proved the reaction actually completed at 1004ms, exactly on schedule. The root cause: in this environment, each `page.getByRole(...).click()` call inside `browser_run_code_unsafe` cost roughly 2 seconds of real wall-clock time (measured directly with `Date.now()`), not the near-instant latency assumed — so a sequence of a few clicks and small nominal waits actually consumed far more real time than intended. This is the same class of mistake made once already in Phase 4 (there, splitting a check across separate tool calls; here, chaining actions within one script) — filed as product feedback given it's now recurred. Lesson re-applied: always get an actual timestamp when a timing question matters, never estimate from nominal wait values when real UI actions are interleaved.
+  - Wardrobe screen renders all six outfits correctly; Cyber Elegance shows a disabled "Currently worn" button, the other five show no button at all (only the "meshes not modeled yet" hint) — confirmed via accessibility snapshot, not just visually.
+  - `localStorage` confirmed to contain `"selectedOutfit":"Cyber Elegance"` after visiting the Wardrobe screen.
+  - Character Settings' outfit hint confirmed updated.
+  - Companion screen confirmed rendering correctly (character visible, IDLE state, zero console errors) after a full navigation round-trip through Wardrobe and Settings.
+  - Dev server and test screenshots cleaned up after verification.
+
+## Known errors (Phase 6)
+None outstanding. (One real architectural bug — screen navigation resetting companion state — found during scoping and fixed before building the feature that depended on it being fixed.)
+
 ## Decisions awaiting user approval
-- Approval to proceed to Phase 6 (Wardrobe: the Cyber Elegance outfit built this phase becomes the first entry in a real outfit-selection framework; additional outfits from spec §3 come later).
+- Approval to proceed to Phase 7 (Keyboard chat UI connected to a backend adapter, per spec §14).
 - No other blocking decisions currently.
 
 ## Approved design/architecture decisions
@@ -149,5 +170,10 @@ None outstanding.
 - Modified: `src/components/AvatarModel.tsx` (rewritten to load the real rig/clips instead of the placeholder), `src/components/AvatarViewport.tsx` (dropped the now-removed `cursorGazeEnabled`/`isPointerInStage` props), `src/components/CompanionScreen.tsx` (updated telemetry/status copy for the real asset), `src/components/CharacterSettingsScreen.tsx` (honest "Cursor gaze" hint update), `src/types/interactionZones.ts` (dropped the placeholder-only `nodeName` field, retuned reaction timing to match real clip length), `PROJECT_STATUS.md`.
 - No files deleted from the web app; the orphaned Phase 2 placeholder GLB was left in place (see above).
 
+## Files created or modified (Phase 6)
+- Created: `src/types/outfits.ts`, `src/components/WardrobeScreen.tsx`.
+- Modified: `src/App.tsx` (Companion screen now always-mounted/CSS-hidden instead of conditionally unmounted — the architectural fix), `src/components/Sidebar.tsx` (Wardrobe nav enabled, phase counter corrected), `src/components/CharacterSettingsScreen.tsx` (outfit hint text), `src/App.css` (wardrobe grid/card styling), `PROJECT_STATUS.md`.
+- No files deleted.
+
 ## Exact next action (requires approval before starting)
-Phase 6 — Wardrobe: build a real outfit-selection framework around the Cyber Elegance top/boots from this phase (spec §3 and §14). Not started.
+Phase 7 — keyboard chat UI connected to a backend adapter (spec §6 and §14). Not started.

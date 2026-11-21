@@ -9,7 +9,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { id: 'companion', label: 'Companion', enabled: true },
-  { id: 'wardrobe', label: 'Wardrobe', enabled: false, disabledReason: 'Arrives in Phase 6' },
+  { id: 'wardrobe', label: 'Wardrobe', enabled: true },
   { id: 'settings', label: 'Character Settings', enabled: true },
   { id: 'memory', label: 'Memory', enabled: false, disabledReason: 'Arrives in Phase 10' },
   { id: 'workspace', label: 'Workspace', enabled: false, disabledReason: 'Arrives in Phase 10' },
@@ -44,7 +44,7 @@ export function Sidebar({ active, onSelect }: SidebarProps) {
       </ul>
       <div className="sidebar-footer">
         <span className="sidebar-pulse" aria-hidden="true" />
-        SYSTEM ONLINE — PHASE 02
+        SYSTEM ONLINE — PHASE 06
       </div>
     </nav>
   )

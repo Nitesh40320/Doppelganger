@@ -3,6 +3,7 @@ import './App.css'
 import { Sidebar, type ScreenId } from './components/Sidebar'
 import { CompanionScreen } from './components/CompanionScreen'
 import { CharacterSettingsScreen } from './components/CharacterSettingsScreen'
+import { WardrobeScreen } from './components/WardrobeScreen'
 import { useCharacterProfile } from './hooks/useCharacterProfile'
 
 function App() {
@@ -13,7 +14,12 @@ function App() {
     <div className="app-shell">
       <Sidebar active={activeScreen} onSelect={setActiveScreen} />
       <main className="app-main">
-        {activeScreen === 'companion' && <CompanionScreen profile={profile} />}
+        {/* Always mounted, hidden via CSS rather than unmounted: switching
+            screens must not reload the 3D scene or reset the companion's
+            animation state (spec Sec3/Sec14, Phase 6 acceptance criterion). */}
+        <div style={{ display: activeScreen === 'companion' ? 'block' : 'none', height: '100%' }}>
+          <CompanionScreen profile={profile} />
+        </div>
         {activeScreen === 'settings' && (
           <CharacterSettingsScreen
             profile={profile}
@@ -21,6 +27,9 @@ function App() {
             onReset={resetProfile}
             justSaved={justSaved}
           />
+        )}
+        {activeScreen === 'wardrobe' && (
+          <WardrobeScreen profile={profile} onChange={updateProfile} />
         )}
       </main>
     </div>

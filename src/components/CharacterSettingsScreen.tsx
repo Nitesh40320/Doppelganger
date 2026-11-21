@@ -81,7 +81,7 @@ export function CharacterSettingsScreen({
         <div className="field readonly-field">
           <span className="field-label">Selected outfit</span>
           <span className="field-static">{profile.selectedOutfit}</span>
-          <span className="field-hint">Wardrobe management arrives in Phase 6.</span>
+          <span className="field-hint">Change this from the Wardrobe screen.</span>
         </div>
 
         <label className="field toggle-field">
