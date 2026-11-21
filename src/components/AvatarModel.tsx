@@ -52,10 +52,13 @@ const ZONE_BONE: Record<ZoneId, string> = {
   armRight: 'hand.R',
 }
 
+const BLINK_DURATION_S = 0.12
+
 interface AvatarModelProps {
   touchIntensity: number
   companionState: CompanionState
   reactionZoneId: ZoneId | null
+  isSpeakingLive: boolean
   onZoneClick: (zoneId: ZoneId) => void
   onZoneHover: (zoneId: ZoneId | null) => void
 }
@@ -64,6 +67,7 @@ export function AvatarModel({
   touchIntensity,
   companionState,
   reactionZoneId,
+  isSpeakingLive,
   onZoneClick,
   onZoneHover,
 }: AvatarModelProps) {
@@ -79,6 +83,15 @@ export function AvatarModel({
   const elapsedRef = useRef(0)
   const ownedMaterialsRef = useRef<THREE.Material[]>([])
   const zoneProxyRefs = useRef<Partial<Record<ZoneId, THREE.Mesh>>>({})
+  const skinnedMeshRef = useRef<THREE.SkinnedMesh | null>(null)
+  const nextBlinkRef = useRef(0)
+  const blinkTimerRef = useRef(0)
+
+  // Math.random() can't run during render (purity rule) - roll the first
+  // blink delay after mount instead.
+  useEffect(() => {
+    nextBlinkRef.current = 2 + Math.random() * 3
+  }, [])
 
   // Clone every material in the scene once so the per-frame glow animation
   // below never mutates useGLTF's shared, cached material resources.
@@ -89,6 +102,9 @@ export function AvatarModel({
         const mat = obj.material as THREE.Material
         if (!cloneMap.has(mat)) cloneMap.set(mat, mat.clone())
         obj.material = cloneMap.get(mat)!
+      }
+      if (obj instanceof THREE.SkinnedMesh && obj.morphTargetDictionary) {
+        skinnedMeshRef.current = obj
       }
     })
     ownedMaterialsRef.current = Array.from(cloneMap.values())
@@ -174,6 +190,52 @@ export function AvatarModel({
         8,
         delta,
       )
+    }
+
+    // Live lip-sync + periodic blink. Runs after the mixer's own update above
+    // (hook call order), so this always wins for the current frame.
+    const mesh = skinnedMeshRef.current
+    const dict = mesh?.morphTargetDictionary
+    const influences = mesh?.morphTargetInfluences
+    if (dict && influences) {
+      // Real TTS audio is playing: drive Mouth_Open directly with a simple
+      // oscillation (spec Sec6's "lightweight approximate fallback" — Web
+      // Speech API gives no phoneme-level timing to sync precisely to).
+      // Stops the instant isSpeakingLive goes false (spec: "stop immediately").
+      const mouthIdx = dict['Mouth_Open']
+      // influences is a plain mutable Float32Array owned by our own skinnedMeshRef
+      // (found via scene.traverse in the mount effect above, same pattern as the
+      // material clones) - writing to it per-frame is the standard three.js
+      // morph-target control API, not a React state mutation.
+      if (mouthIdx !== undefined) {
+        if (isSpeakingLive) {
+          // eslint-disable-next-line react-hooks/immutability
+          influences[mouthIdx] = 0.25 + Math.abs(Math.sin(elapsedRef.current * 12)) * 0.5
+        } else if (companionState !== 'speaking') {
+          // Not driven by live TTS and no baked clip owns this target either —
+          // force it shut so a cancelled/ended utterance never leaves it stuck open.
+          influences[mouthIdx] = 0
+        }
+      }
+
+      // Periodic blink, independent of the discrete state machine — spec Sec6
+      // asks to "keep blinking and eye movement active while speaking", and
+      // this project had no blink loop at all before this phase.
+      const blinkIdx = dict['Blink']
+      if (blinkIdx !== undefined) {
+        nextBlinkRef.current -= delta
+        if (nextBlinkRef.current <= 0 && blinkTimerRef.current <= 0) {
+          blinkTimerRef.current = BLINK_DURATION_S
+          nextBlinkRef.current = 2.5 + Math.random() * 3.5
+        }
+        let blinkValue = 0
+        if (blinkTimerRef.current > 0) {
+          blinkTimerRef.current -= delta
+          const progress = 1 - Math.max(blinkTimerRef.current, 0) / BLINK_DURATION_S
+          blinkValue = Math.sin(Math.min(progress, 1) * Math.PI)
+        }
+        influences[blinkIdx] = blinkValue
+      }
     }
   })
 

@@ -147,10 +147,22 @@ export function CharacterSettingsScreen({
             <option value="always-on">Always listening</option>
           </select>
           <span className="field-hint">
-            No microphone or voice pipeline is connected yet (Phase 8). This only stores your
-            preference for later.
+            Voice input is live (Ctrl+Space or the Mic button), but it's always explicit
+            push-to-talk for now regardless of this setting — "Always listening" is stored as
+            a preference only; continuous listening isn't implemented yet, by design (no
+            hidden recording).
           </span>
         </label>
+
+        <div className="field readonly-field">
+          <span className="field-label">Voice privacy note</span>
+          <span className="field-hint">
+            Voice input uses your browser's built-in speech recognition. In Chrome/Edge, that
+            means your microphone audio is sent to Google's servers for transcription — it
+            isn't processed locally. Voice output (text-to-speech) runs entirely on your
+            device. No audio is stored or sent anywhere else by this app.
+          </span>
+        </div>
       </div>
 
       <button type="button" className="reset-button" onClick={onReset}>

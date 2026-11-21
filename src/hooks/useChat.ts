@@ -7,13 +7,17 @@ interface UseChatOptions {
   adapter: ChatAdapter
   requestTransition: (state: CompanionState) => boolean
   completeFrom: (from: CompanionState, to: CompanionState) => boolean
+  /** Called with a successful reply's text, so a TTS hook can speak it. Wired
+   * now even though the current adapter never succeeds, so connecting a real
+   * backend later needs no changes here. */
+  onAssistantReply?: (text: string) => void
 }
 
 function makeMessage(role: ChatMessage['role'], text: string, isError = false): ChatMessage {
   return { id: crypto.randomUUID(), role, text, isError, timestamp: Date.now() }
 }
 
-export function useChat({ adapter, requestTransition, completeFrom }: UseChatOptions) {
+export function useChat({ adapter, requestTransition, completeFrom, onAssistantReply }: UseChatOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isSending, setIsSending] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
@@ -40,6 +44,7 @@ export function useChat({ adapter, requestTransition, completeFrom }: UseChatOpt
         if (result.ok) {
           setMessages((prev) => [...prev, makeMessage('assistant', result.reply)])
           completeFrom('thinking', 'speaking')
+          onAssistantReply?.(result.reply)
         } else {
           setMessages((prev) => [...prev, makeMessage('system', result.error, true)])
           completeFrom('thinking', 'idle')
@@ -52,7 +57,7 @@ export function useChat({ adapter, requestTransition, completeFrom }: UseChatOpt
         if (!controller.signal.aborted) setIsSending(false)
       }
     },
-    [adapter, isSending, requestTransition, completeFrom],
+    [adapter, isSending, requestTransition, completeFrom, onAssistantReply],
   )
 
   const cancelSend = useCallback(() => {
@@ -62,5 +67,9 @@ export function useChat({ adapter, requestTransition, completeFrom }: UseChatOpt
     completeFrom('thinking', 'idle')
   }, [completeFrom])
 
-  return { messages, isSending, sendMessage, cancelSend }
+  const addSystemMessage = useCallback((text: string, isError = true) => {
+    setMessages((prev) => [...prev, makeMessage('system', text, isError)])
+  }, [])
+
+  return { messages, isSending, sendMessage, cancelSend, addSystemMessage }
 }

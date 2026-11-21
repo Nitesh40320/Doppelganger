@@ -1,19 +1,31 @@
-import { useState, type KeyboardEvent } from 'react'
+import type { KeyboardEvent } from 'react'
 
 interface ChatComposerProps {
+  value: string
+  onChange: (text: string) => void
   isSending: boolean
   onSend: (text: string) => void
-  onCancel: () => void
+  onCancelSend: () => void
+  isListening: boolean
+  micSupported: boolean
+  onToggleListening: () => void
 }
 
-export function ChatComposer({ isSending, onSend, onCancel }: ChatComposerProps) {
-  const [draft, setDraft] = useState('')
-
+export function ChatComposer({
+  value,
+  onChange,
+  isSending,
+  onSend,
+  onCancelSend,
+  isListening,
+  micSupported,
+  onToggleListening,
+}: ChatComposerProps) {
   function submit() {
-    const text = draft.trim()
+    const text = value.trim()
     if (!text || isSending) return
     onSend(text)
-    setDraft('')
+    onChange('')
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -21,42 +33,52 @@ export function ChatComposer({ isSending, onSend, onCancel }: ChatComposerProps)
       event.preventDefault()
       submit()
     } else if (event.key === 'Escape') {
-      if (draft) {
-        setDraft('')
+      if (isListening) {
+        onToggleListening()
+      } else if (value) {
+        onChange('')
       } else if (isSending) {
-        onCancel()
+        onCancelSend()
       }
     }
   }
 
-  const rows = Math.min(Math.max(draft.split('\n').length, 1), 4)
+  const rows = Math.min(Math.max(value.split('\n').length, 1), 4)
 
   return (
     <div className="chat-composer">
       <textarea
         className="chat-input"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Type a message…"
+        placeholder={isListening ? 'Listening…' : 'Type a message…'}
         rows={rows}
         aria-label="Message"
       />
       <button
         type="button"
-        className="mic-button"
-        disabled
-        title="Voice input arrives in Phase 8"
-        aria-label="Voice input (not yet available)"
+        className={`mic-button${isListening ? ' mic-active' : ''}`}
+        disabled={!micSupported}
+        onClick={onToggleListening}
+        title={
+          micSupported
+            ? isListening
+              ? 'Stop listening (Ctrl+Space)'
+              : 'Push to talk (Ctrl+Space)'
+            : "Voice input isn't supported in this browser"
+        }
+        aria-label={isListening ? 'Stop voice input' : 'Start voice input'}
+        aria-pressed={isListening}
       >
-        Mic
+        {isListening ? 'Listening…' : 'Mic'}
       </button>
       {isSending ? (
-        <button type="button" className="chat-send-button" onClick={onCancel}>
+        <button type="button" className="chat-send-button" onClick={onCancelSend}>
           Cancel
         </button>
       ) : (
-        <button type="button" className="chat-send-button" disabled={!draft.trim()} onClick={submit}>
+        <button type="button" className="chat-send-button" disabled={!value.trim()} onClick={submit}>
           Send
         </button>
       )}

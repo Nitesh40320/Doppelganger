@@ -1,7 +1,10 @@
 # Project Doppelgänger — Status
 
 ## Current phase
-**Phase 7 — keyboard chat.** Status: **WAITING** (implemented, tested, awaiting user approval to begin Phase 8).
+**Phase 8 — voice pipeline.** Status: **WAITING** (implemented, tested, awaiting user approval to begin Phase 9).
+
+## Provider decision for Phase 8 (confirmed with user before starting)
+Asked the user to choose between: (a) the browser-native Web Speech API (free, no backend, works today, but inconsistent cross-browser support and Chrome sends audio to Google's servers for recognition), (b) building the pipeline with the provider stubbed out, or (c) holding for a paid cloud provider + the backend server needed to keep its API key off the frontend. They chose (a). Everything below uses Web Speech API (`SpeechRecognition` + `SpeechSynthesis`) as the live adapter implementation, with the Chrome/Google privacy caveat disclosed directly in Character Settings, not buried.
 
 ## Scope decision for Phase 5 (confirmed with user before starting)
 A fully sculpted, production-quality adult anime face/body — the "high-quality 3D anime
@@ -162,8 +165,40 @@ None outstanding. (One real architectural bug — screen navigation resetting co
 ## Known errors (Phase 7)
 None outstanding.
 
+## Completed tasks (Phase 8)
+- **STT adapter** (`sttAdapter.ts` interface, `webSpeechSttAdapter.ts` implementation): wraps `SpeechRecognition`, maps its error codes to a small typed set (`permission-denied`, `no-microphone`, `no-speech`, `network`, `not-supported`, `other`), each with an honest, specific user-facing message — spec §15's testing checklist explicitly calls out all of these ("Microphone permission denied, unavailable microphone, silence, and network failure are handled").
+- **TTS adapter** (`ttsAdapter.ts` interface, `webSpeechTtsAdapter.ts` implementation): wraps `SpeechSynthesis`/`SpeechSynthesisUtterance`.
+- **`useVoiceInput`**: push-to-talk capture wired to the *same* state-machine instance as chat/reactions (`requestTransition('listening')` on start, `completeFrom('listening','idle')` on end) — not a separate copy. Exposes `start`/`stop`/`isListening`/`error`.
+- **`useVoiceOutput`**: `speak`/`stop`/`isSpeaking`/`error`. A real circular-dependency problem surfaced while wiring this up — see "debugging notes" below — fixed by having both voice hooks report errors as plain state rather than callbacks, with the chat log subscribing to that state reactively instead.
+- **Transcript UX**: chose "transcript preview / optional confirmation" (spec §6) over auto-send — speech fills the chat composer live as interim/final results arrive, but the user still presses Enter/Send themselves. Consistent with this project's consent-first posture elsewhere.
+- **Push-to-talk**: Ctrl+Space toggles listening (spec §6), scoped to only fire while the Companion screen is actually visible (a new `isActiveScreen` prop from `App.tsx`) — confirmed it does *not* fire while on Settings/Wardrobe.
+- **Lip-sync**: real TTS audio drives the `Mouth_Open` morph target directly with a simple oscillation — spec §6's own "lightweight approximate fallback," since Web Speech API gives no phoneme-level timing to sync precisely to. Snaps to 0 immediately when speech ends or is stopped (spec: "stop mouth animation immediately"), without disturbing the Phase 5 baked `Speaking_Mouth` clip still used by the dev-simulate button.
+- **Continuous blink**: added a periodic blink (random 2.5-6s interval, ~120ms pulse) driven directly in `AvatarModel`'s frame loop, independent of the discrete state machine — spec §6 explicitly asks to "keep blinking and eye movement active while speaking," and this project had no blink loop of any kind before this phase.
+- **Mute/stop control**: a "Stop speaking" button appears whenever TTS is actually playing, calling `speechSynthesis.cancel()` immediately.
+- **Mic-active indicator**: a clearly visible `● MIC ACTIVE` badge in the stage telemetry whenever listening, satisfying spec §6/§13's requirement for an unambiguous recording indicator — never hidden or silent.
+- **Full pipeline wiring for the future**: a successful chat reply (`useChat`'s `onAssistantReply` callback) automatically gets spoken via TTS — unreachable today since the adapter always errors, but means connecting a real backend later needs zero changes here for voice output to start working.
+- **Settings disclosure**: rewrote the "Voice activation" hint to honestly state that only explicit push-to-talk is implemented regardless of the stored preference (continuous "always-on" listening was deliberately not built, to avoid anything resembling hidden recording — spec §13), and added a new "Voice privacy note" field disclosing plainly that Chrome/Edge sends microphone audio to Google's servers for recognition, while TTS runs entirely on-device.
+
+## Debugging notes from Phase 8 (for future reference, not current defects)
+- **A real circular-dependency bug caught during design, before writing broken code**: the natural design had `useChat` call `voiceOutput.speak()` on a successful reply, and `useVoiceOutput` call `addSystemMessage()` (from `useChat`) on error — each hook needing the other's return value before either could be constructed. Fixed by having both voice hooks expose `error` as plain state instead of taking an `onError` callback, with `CompanionScreen` subscribing to that state via a `useEffect` after both hooks exist. No circular reference, same end result.
+- **A second real bug, caught by live testing, not assumed**: wiring the TTS test button to the state machine via `requestTransition('thinking')` immediately followed by `completeFrom('thinking','speaking')` (no `await` between them, unlike every other place in this codebase that chains these calls) silently failed — `completeFrom` always saw a stale `stateRef.current` and rejected the transition, because the ref was only ever synced via a reactive `useEffect` that hadn't run yet in the same tick. This had been latent since Phase 4; every existing call site happened to have a natural delay (a `setTimeout`, an `await` on the chat adapter) between chained transitions, which gave React time to commit and sync the ref first. Fixed properly in `useCompanionStateMachine.ts`: `requestTransition`/`completeFrom` now update the ref synchronously themselves (safe — they only ever run inside event handlers/effects, never during React's render pass), rather than relying solely on the separate reactive sync effect. Verified live afterward: `STATE: SPEAKING` now shows correctly during the TTS test, confirmed via Playwright before and after the fix.
+
+## Tests actually run and results (Phase 8)
+- `npx tsc -b` / `npx eslint .` → clean. Fixed three real issues along the way: `Math.random()` called in a ref initializer during render (React's purity rule) — moved into a mount effect; a morph-target-array write flagged as mutating a hook-derived value, same category as Phase 4/5's material-clone case and justified the same way (our own ref, standard three.js imperative API); and a `setState` called synchronously inside an effect for interim-transcript syncing — fixed by routing it through a callback (`onInterimTranscript`) from the point the data actually arrives, rather than mirroring derived state reactively.
+- `npm run build` → succeeds (same pre-existing bundle-size warning, deferred to Phase 9).
+- Live Playwright verification against `npm run dev`, zero console errors throughout:
+  - **TTS pipeline confirmed fully working end-to-end**: pressing "Test voice reply" correctly entered `STATE: SPEAKING`, showed the speaking bar, and — after waiting long enough for the ~7-second test sentence to actually finish playing at normal speech rate (an early check at a too-short wait misleadingly suggested it hadn't ended; waiting longer showed it had) — correctly returned to idle/attention with the speaking bar gone.
+  - **Mic start/stop confirmed working both via the Mic button and Ctrl+Space**: each correctly toggled `STATE: LISTENING` with the mic-active indicator, and correctly stopped back to `IDLE` on request.
+  - **Ctrl+Space confirmed correctly scoped**: pressing it while on Character Settings did not start listening; returning to Companion afterward showed `IDLE`, not `LISTENING`.
+  - **A real limitation of this testing method, disclosed rather than glossed over**: this automated browser environment has no real microphone input, so actual speech-to-transcript accuracy could not be verified end-to-end here — `SpeechRecognition.start()` entered the listening state without error (no permission prompt blocked it in this environment) but never produced a result or a natural `no-speech` timeout within a generous wait, most likely because the environment provides silence indefinitely rather than timing out the way a real microphone would. This was not treated as a pass; the manual stop path was verified instead, and a reliability caveat is recorded here honestly rather than claiming full voice-conversation testing that didn't actually happen.
+  - Character Settings' updated voice-activation hint and new privacy-disclosure field confirmed rendering correctly.
+  - Dev server and test screenshots cleaned up after verification.
+
+## Known errors (Phase 8)
+None outstanding. (Two real bugs — the circular dependency, caught before writing it, and the stale-ref state-machine chaining bug, caught by live testing — found and fixed this phase; see debugging notes above.)
+
 ## Decisions awaiting user approval
-- Approval to proceed to Phase 8 (push-to-talk STT, response TTS, mute/stop, lip-sync — per spec §14, likely the phase where choosing an actual STT/TTS provider becomes a material decision requiring a check-in).
+- Approval to proceed to Phase 9 (performance pass: Low/Balanced/High presets, profiling, asset optimization — per spec §10/§14. The ~1.25 MB JS bundle warning, flagged since Phase 2, becomes directly relevant here).
 - No other blocking decisions currently.
 
 ## Approved design/architecture decisions
@@ -201,5 +236,10 @@ None outstanding.
 - Modified: `src/components/CompanionScreen.tsx` (chat wiring, updated status/dev-panel copy), `src/App.css` (chat panel/log/bubble/composer styling), `PROJECT_STATUS.md`.
 - No files deleted.
 
+## Files created or modified (Phase 8)
+- Created: `src/adapters/sttAdapter.ts`, `src/adapters/webSpeechSttAdapter.ts`, `src/adapters/webSpeechTypes.ts`, `src/adapters/ttsAdapter.ts`, `src/adapters/webSpeechTtsAdapter.ts`, `src/hooks/useVoiceInput.ts`, `src/hooks/useVoiceOutput.ts`.
+- Modified: `src/hooks/useChat.ts` (`onAssistantReply` hook for future TTS auto-speak, `addSystemMessage` export), `src/hooks/useCompanionStateMachine.ts` (the stale-ref chaining fix), `src/components/AvatarModel.tsx` (live lip-sync + periodic blink), `src/components/AvatarViewport.tsx` (`isSpeakingLive` prop), `src/components/ChatComposer.tsx` (now a controlled component, Mic button live), `src/components/CompanionScreen.tsx` (voice wiring, Ctrl+Space, speaking bar, TTS test button), `src/components/CharacterSettingsScreen.tsx` (voice-activation hint + new privacy note), `src/App.tsx` (`isActiveScreen` prop), `src/App.css` (mic/speaking-bar styling), `PROJECT_STATUS.md`.
+- No files deleted.
+
 ## Exact next action (requires approval before starting)
-Phase 8 — push-to-talk STT, response TTS, mute/stop, lip-sync (spec §6 and §14). Not started. Likely to raise a provider-choice question before implementation, since STT/TTS vendor selection is an explicit material decision per spec §19.2/§20.6.
+Phase 9 — performance pass: Low/Balanced/High quality presets, profiling, and asset optimization (spec §10 and §14). Not started.

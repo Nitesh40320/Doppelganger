@@ -22,6 +22,7 @@ interface AvatarViewportProps {
   touchIntensity: number
   companionState: CompanionState
   reactionZoneId: ZoneId | null
+  isSpeakingLive: boolean
   onZoneClick: (zoneId: ZoneId) => void
   onZoneHover: (zoneId: ZoneId | null) => void
   onStageHoverChange: (hovering: boolean) => void
@@ -31,6 +32,7 @@ export function AvatarViewport({
   touchIntensity,
   companionState,
   reactionZoneId,
+  isSpeakingLive,
   onZoneClick,
   onZoneHover,
   onStageHoverChange,
@@ -59,6 +61,7 @@ export function AvatarViewport({
               touchIntensity={touchIntensity}
               companionState={companionState}
               reactionZoneId={reactionZoneId}
+              isSpeakingLive={isSpeakingLive}
               onZoneClick={onZoneClick}
               onZoneHover={onZoneHover}
             />

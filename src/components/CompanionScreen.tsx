@@ -5,12 +5,18 @@ import { ChatComposer } from './ChatComposer'
 import { ChatLog } from './ChatLog'
 import { useCompanionStateMachine } from '../hooks/useCompanionStateMachine'
 import { useChat } from '../hooks/useChat'
+import { useVoiceInput } from '../hooks/useVoiceInput'
+import { useVoiceOutput } from '../hooks/useVoiceOutput'
 import { notConnectedChatAdapter } from '../adapters/notConnectedChatAdapter'
+import { webSpeechSttAdapter } from '../adapters/webSpeechSttAdapter'
+import { webSpeechTtsAdapter } from '../adapters/webSpeechTtsAdapter'
 import { INTERACTION_ZONES, REACTION_DURATION_MS, type ZoneId } from '../types/interactionZones'
 
 const SIMULATED_LISTEN_MS = 1200
 const SIMULATED_THINK_MS = 1400
 const SIMULATED_SPEAK_MS = 2200
+const TTS_TEST_LINE =
+  "Hello! This is a test of text to speech, independent of the chat backend, which still isn't connected."
 
 function resolveAddressPreview(profile: CharacterProfile): string {
   switch (profile.addressMode) {
@@ -34,16 +40,73 @@ const STATE_LABELS: Record<string, string> = {
   error: 'SAFE MODE',
 }
 
-export function CompanionScreen({ profile }: { profile: CharacterProfile }) {
+interface CompanionScreenProps {
+  profile: CharacterProfile
+  isActiveScreen: boolean
+}
+
+export function CompanionScreen({ profile, isActiveScreen }: CompanionScreenProps) {
   const { state, requestTransition, completeFrom } = useCompanionStateMachine()
-  const { messages, isSending, sendMessage, cancelSend } = useChat({
-    adapter: notConnectedChatAdapter,
-    requestTransition,
-    completeFrom,
-  })
+  const [draft, setDraft] = useState('')
   const [hoveredZone, setHoveredZone] = useState<ZoneId | null>(null)
   const [reactionZone, setReactionZone] = useState<ZoneId | null>(null)
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([])
+
+  const voiceOutput = useVoiceOutput({ adapter: webSpeechTtsAdapter })
+
+  const { messages, isSending, sendMessage, cancelSend, addSystemMessage } = useChat({
+    adapter: notConnectedChatAdapter,
+    requestTransition,
+    completeFrom,
+    onAssistantReply: (text) => voiceOutput.speak(text),
+  })
+
+  const voiceInput = useVoiceInput({
+    adapter: webSpeechSttAdapter,
+    requestTransition,
+    completeFrom,
+    onInterimTranscript: (text) => setDraft(text),
+    onFinalTranscript: (text) => setDraft(text),
+  })
+
+  // Both voice hooks report errors as state rather than a callback, to avoid
+  // a circular dependency (useChat needs voiceOutput.speak; a callback-based
+  // voiceOutput.onError would need addSystemMessage from useChat right back).
+  // Surfacing them into the chat log reactively here breaks that cycle.
+  useEffect(() => {
+    if (voiceInput.error) addSystemMessage(voiceInput.error)
+  }, [voiceInput.error, addSystemMessage])
+
+  useEffect(() => {
+    if (voiceOutput.error) addSystemMessage(voiceOutput.error)
+  }, [voiceOutput.error, addSystemMessage])
+
+  // Reflects real TTS audio into the state machine (the dev-simulate button
+  // drives 'speaking' on its own timer and never touches this).
+  useEffect(() => {
+    if (voiceOutput.isSpeaking) {
+      requestTransition('thinking')
+      completeFrom('thinking', 'speaking')
+    } else {
+      completeFrom('speaking', 'idle')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voiceOutput.isSpeaking])
+
+  // Ctrl+Space push-to-talk, scoped to while this is the visible screen (spec Sec6).
+  useEffect(() => {
+    if (!isActiveScreen) return
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.ctrlKey && event.code === 'Space') {
+        event.preventDefault()
+        if (voiceInput.isListening) voiceInput.stop()
+        else voiceInput.start()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActiveScreen, voiceInput.isListening])
 
   function schedule(fn: () => void, ms: number) {
     const id = setTimeout(fn, ms)
@@ -91,6 +154,10 @@ export function CompanionScreen({ profile }: { profile: CharacterProfile }) {
     completeFrom('error', 'idle')
   }
 
+  function testVoiceReply() {
+    voiceOutput.speak(TTS_TEST_LINE)
+  }
+
   const hoveredZoneLabel = hoveredZone
     ? INTERACTION_ZONES.find((zone) => zone.id === hoveredZone)?.label
     : null
@@ -103,16 +170,20 @@ export function CompanionScreen({ profile }: { profile: CharacterProfile }) {
   if (reactionLine) {
     statusLine = `${profile.characterName} ${reactionLine}`
   } else if (state === 'listening') {
-    statusLine = `${profile.characterName} is listening… (dev-simulated — real voice input arrives in Phase 8)`
+    statusLine = voiceInput.isListening
+      ? `${profile.characterName} is listening — speak now, or press Ctrl+Space / the Mic button to stop.`
+      : `${profile.characterName} is listening… (dev-simulated)`
   } else if (state === 'thinking') {
     statusLine = `${profile.characterName} is thinking about your message…`
   } else if (state === 'speaking') {
-    statusLine = `${profile.characterName} is speaking… (no voice/TTS is connected yet)`
+    statusLine = voiceOutput.isSpeaking
+      ? `${profile.characterName} is speaking.`
+      : `${profile.characterName} is speaking… (dev-simulated, no audio)`
   } else if (state === 'error') {
     statusLine = 'Safe mode: something in the simulated pipeline failed. The companion stays visible and usable.'
   } else {
     statusLine =
-      'This is the real rigged character with her first animation clips (Phase 5) — base body, default Cyber Elegance outfit, and basic facial shape keys. Keyboard chat below is fully wired up, but no AI backend is connected yet, so every message honestly gets a "not connected" reply. Voice input isn\'t implemented yet (Phase 8).'
+      'This is the real rigged character with her first animation clips (Phase 5). Keyboard chat and voice input/output are fully wired up (Phase 7-8), but no AI backend is connected yet, so every message honestly gets a "not connected" reply.'
   }
 
   return (
@@ -127,11 +198,13 @@ export function CompanionScreen({ profile }: { profile: CharacterProfile }) {
           <span>ASSET: astra_v001.glb</span>
           <span>STATE: {STATE_LABELS[state]}</span>
           {hoveredZoneLabel && <span>ZONE: {hoveredZoneLabel.toUpperCase()}</span>}
+          {voiceInput.isListening && <span className="hud-mic-indicator">● MIC ACTIVE</span>}
         </div>
         <AvatarViewport
           touchIntensity={profile.touchIntensity}
           companionState={state}
           reactionZoneId={reactionZone}
+          isSpeakingLive={voiceOutput.isSpeaking}
           onZoneClick={handleZoneClick}
           onZoneHover={setHoveredZone}
           onStageHoverChange={handleStageHoverChange}
@@ -157,17 +230,38 @@ export function CompanionScreen({ profile }: { profile: CharacterProfile }) {
       </div>
       <div className="chat-panel hud-frame-soft">
         <ChatLog messages={messages} isSending={isSending} characterName={profile.characterName} />
-        <ChatComposer isSending={isSending} onSend={sendMessage} onCancel={cancelSend} />
+        {voiceOutput.isSpeaking && (
+          <div className="speaking-bar hud-mono">
+            <span>🔊 {profile.characterName} is speaking</span>
+            <button type="button" onClick={voiceOutput.stop}>
+              Stop speaking
+            </button>
+          </div>
+        )}
+        <ChatComposer
+          value={draft}
+          onChange={setDraft}
+          isSending={isSending}
+          onSend={sendMessage}
+          onCancelSend={cancelSend}
+          isListening={voiceInput.isListening}
+          micSupported={webSpeechSttAdapter.isSupported()}
+          onToggleListening={() => (voiceInput.isListening ? voiceInput.stop() : voiceInput.start())}
+        />
       </div>
       <div className="dev-state-panel hud-frame-soft hud-mono">
         <span className="dev-state-label">
-          DEV: STATE MACHINE TEST — sending a chat message above now drives real THINKING,
-          but always ends in an honest "no backend" error; LISTENING/SPEAKING still need
-          voice (Phase 8) and a connected backend to trigger for real
+          DEV: STATE MACHINE TEST — chat and voice above now drive real THINKING/LISTENING
+          states; chat always ends in an honest "no backend" error since no AI backend is
+          connected. SPEAKING only happens for real via the TTS test button below, since the
+          chat backend never actually replies.
         </span>
         <div className="dev-state-buttons">
           <button type="button" onClick={simulateConversationTurn}>
             Simulate conversation turn
+          </button>
+          <button type="button" onClick={testVoiceReply}>
+            Test voice reply (TTS)
           </button>
           <button type="button" onClick={forceErrorState}>
             Force error / safe mode

@@ -752,8 +752,58 @@
   background: transparent;
   border: 1px solid var(--panel-border);
   color: var(--text-dim);
+}
+
+.mic-button:hover:not(:disabled) {
+  border-color: var(--cyan);
+  color: var(--text);
+}
+
+.mic-button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+.mic-button.mic-active {
+  background: rgba(255, 107, 107, 0.12);
+  border-color: #ff6b6b;
+  color: #ff9b9b;
+  animation: hud-pulse 1.4s ease-in-out infinite;
+}
+
+.hud-mic-indicator {
+  color: #ff9b9b !important;
+  text-shadow: 0 0 6px rgba(255, 107, 107, 0.6);
+}
+
+.speaking-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--cyan-soft);
+  border: 1px solid var(--cyan);
+  border-radius: 2px;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.speaking-bar button {
+  background: transparent;
+  border: 1px solid var(--cyan);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.speaking-bar button:hover {
+  box-shadow: 0 0 8px var(--cyan-glow);
 }
 
 .chat-send-button {

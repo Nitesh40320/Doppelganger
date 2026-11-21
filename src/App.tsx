@@ -18,7 +18,7 @@ function App() {
             screens must not reload the 3D scene or reset the companion's
             animation state (spec Sec3/Sec14, Phase 6 acceptance criterion). */}
         <div style={{ display: activeScreen === 'companion' ? 'block' : 'none', height: '100%' }}>
-          <CompanionScreen profile={profile} />
+          <CompanionScreen profile={profile} isActiveScreen={activeScreen === 'companion'} />
         </div>
         {activeScreen === 'settings' && (
           <CharacterSettingsScreen

@@ -30,6 +30,12 @@ export function useCompanionStateMachine() {
   const requestTransition = useCallback(
     (target: CompanionState) => {
       if (!canEnter(target)) return false
+      // Update the ref synchronously (not just via the state-syncing effect
+      // above) so a caller can immediately chain a completeFrom() in the same
+      // tick — e.g. requestTransition('thinking') then completeFrom('thinking',
+      // 'speaking') with no await between them. Safe here: this runs inside an
+      // event handler/effect body, never during React's render pass itself.
+      stateRef.current = target
       setState(target)
       return true
     },
@@ -42,6 +48,7 @@ export function useCompanionStateMachine() {
    * guards against a stale timer clobbering a newer, higher-priority state. */
   const completeFrom = useCallback((fromState: CompanionState, target: CompanionState) => {
     if (stateRef.current !== fromState) return false
+    stateRef.current = target
     setState(target)
     return true
   }, [])
