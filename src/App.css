@@ -822,3 +822,131 @@
   color: var(--text-dim);
   cursor: default;
 }
+
+/* Memory */
+.memory-screen {
+  max-width: 760px;
+}
+
+.memory-intro {
+  max-width: 640px;
+  margin-bottom: 20px;
+}
+
+.memory-add-form {
+  background: var(--panel);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.memory-add-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.memory-add-row .field {
+  flex: 1;
+  min-width: 160px;
+}
+
+.memory-add-form textarea {
+  background: var(--bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 2px;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  padding: 10px 12px;
+  resize: vertical;
+}
+
+.memory-add-form textarea:focus {
+  outline: none;
+  border-color: var(--cyan);
+}
+
+.memory-add-button {
+  align-self: flex-start;
+}
+
+.memory-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  color: var(--text-dim);
+}
+
+.memory-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.memory-card {
+  background: var(--panel);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.memory-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.memory-card-content {
+  font-size: 14px;
+  margin: 0;
+  line-height: 1.45;
+}
+
+.memory-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.memory-edit-textarea {
+  background: var(--bg);
+  border: 1px solid var(--cyan);
+  border-radius: 2px;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+.memory-delete-button:hover {
+  border-color: #ff6b6b;
+  color: #ff9b9b;
+  box-shadow: 0 0 8px rgba(255, 107, 107, 0.3);
+}
+
+.memory-card-fact {
+  box-shadow: inset 2px 0 0 var(--cyan);
+}
+
+.memory-card-preference {
+  box-shadow: inset 2px 0 0 #b084f5;
+}
+
+.memory-card-experience {
+  box-shadow: inset 2px 0 0 #6fd38a;
+}
+
+.memory-card-unverified {
+  box-shadow: inset 2px 0 0 var(--text-dim);
+}
+
+.memory-card-correction {
+  box-shadow: inset 2px 0 0 #ff6b6b;
+}

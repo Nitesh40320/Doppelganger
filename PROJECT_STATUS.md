@@ -1,7 +1,10 @@
 # Project Doppelgänger — Status
 
 ## Current phase
-**Phase 10 — integration.** Status: IN PROGRESS (Phase 9 approved; character-art generation attempted and paused — see below; backend/memory/workspace scope still needs to be defined with the user before implementation).
+**Phase 10 — integration.** Status: **WAITING** (Memory screen implemented and tested; Workspace/Activity deliberately deferred — see scope decision below; awaiting user approval to move beyond Phase 10).
+
+## Scope decision for Phase 10 (confirmed with user before starting)
+The spec's literal ask ("connect approved memory/workspace/task APIs") doesn't fully make sense yet: no AI backend exists to actually use memory or act on workspace files, and Workspace specifically runs into a real technical wall for a pure frontend app — browsers can't read/write arbitrary paths like `D:\crazy_idea` without either a backend server or the user manually granting a folder via the File System Access API (Chromium-only, re-granted every session, can't be pre-scoped to a fixed path). Presented three options; user chose **Memory screen only**, deferring Workspace/Activity until a real backend exists to make them meaningful.
 
 ## Character art: AI generation attempt (between Phase 9 and 10, 2026-11-21)
 User asked for a timeline on finishing the polished character/outfit art. Answered honestly: procedural Blender scripting (used for the Phase 5 rig) cannot produce sculpted anime-quality art — that gap can only be closed by (a) an AI 3D generator, (b) a human 3D artist, or (c) a licensed/purchased asset. User chose (a) as a first step.
@@ -226,9 +229,30 @@ None outstanding. (Two real bugs — the circular dependency, caught before writ
 ## Known errors (Phase 9)
 None outstanding.
 
+## Completed tasks (Phase 10)
+- **Memory types and store** (`src/types/memory.ts`, `src/hooks/useMemoryStore.ts`): a `MemoryEntry` persisted via the same `localStorage` pattern as every other setting since Phase 1, with the five categories from spec §12's handling table reproduced exactly — Verified objective fact (source + confidence), User preference, Personal experience, Unverified claim, and Correction/detected mistake — each with its own description shown inline so the distinction is visible, not just internal.
+- **Memory screen** (`src/components/MemoryScreen.tsx`): add/edit/delete individual entries, a "Clear all memory" control (spec §13's explicit privacy-control requirement), and a category-colored accent per entry. Since no AI backend exists to populate this automatically, entries are only ever added by hand — the screen says so plainly rather than implying automatic learning that isn't happening. Both delete actions require a native confirm dialog before proceeding (destructive-action confirmation, consistent with the project's broader safety rules).
+- Enabled the previously-disabled "Memory" nav item. Left Workspace/Activity disabled with updated reasons ("needs a backend/file-access decision" / "needs a backend to have anything to log") rather than the old generic "Arrives in Phase 10", since Phase 10 as delivered doesn't include them.
+
+## Tests actually run and results (Phase 10)
+- `npx tsc -b` / `npx eslint .` → clean.
+- `npm run build` → succeeds (same pre-existing bundle-size warning, deferred — the main chunk is still 246 KB from Phase 9's split; Memory added negligible weight).
+- Live Playwright verification against `npm run dev`, zero real application errors:
+  - Added a "Verified objective fact" entry with source + confidence — confirmed the source/confidence fields only appear for that category (confirmed by counting form rows, not just visually).
+  - Edited that entry's content in place and confirmed the saved text updated correctly.
+  - Added a "User preference" entry and confirmed entry count incremented correctly.
+  - Deleted a single entry and separately cleared all entries, each behind a native `confirm()` — confirmed the resulting empty state (disabled "Clear all" button, "No memory entries yet" message) both times.
+  - **Confirmed persistence across a real full-page reload**, not just in-memory state: added an entry, reloaded, navigated back to Memory, and found the entry intact with the correct category/timestamp/content.
+  - One console error appeared during testing (`Cannot accept dialog which is already handled`) — traced to my own test script redundantly calling `dialog.accept()` on a confirm dialog the test harness had already resolved; confirmed via a follow-up snapshot that the actual delete had gone through correctly regardless. Not an application bug — noted here so it isn't mistaken for one later.
+  - Dev server and test screenshots cleaned up after verification.
+
+## Known errors (Phase 10)
+None outstanding in the application. (One test-script-only race noted above, not a product defect.)
+
 ## Decisions awaiting user approval
-- Approval to proceed to Phase 10 (integration: connect approved memory/workspace/task APIs, per spec §14 — the first phase requiring real backend infrastructure and permission-boundary design).
-- Open item, not blocking: real-hardware validation on the actual target laptop hasn't happened (see above) — flagging in case the user wants to test on their own machine and report back before Phase 10, though not required to proceed.
+- Approval to move beyond Phase 10. Workspace and Activity remain deliberately unbuilt until a backend exists — revisit when choosing one (see Phase 8/9's recurring flag that a real backend decision is still pending).
+- Open item, not blocking: real-hardware validation on the actual target laptop (flagged since Phase 9) still hasn't happened.
+- Open item, not blocking: the AI 3D generation path (Tripo/Hyper3D) is paused on account credit — retry whenever convenient.
 
 ## Approved design/architecture decisions
 - Visual direction: Iron Man/JARVIS-style HUD chrome (corner brackets, scanlines, grid background, mono telemetry readouts) layered onto the existing dark-navy/cyan palette from Phase 1 — user-requested, applied this phase.
@@ -275,5 +299,10 @@ None outstanding.
 - Modified: `src/types/characterProfile.ts` (`qualityPreset` field), `src/components/AvatarViewport.tsx` (lazy-load boundary moved to its call site, preset-driven dpr/antialias/bloom, `frameloop` control), `src/components/CompanionScreen.tsx` (tab-visibility tracking, `React.lazy` import, Suspense fallback), `src/components/CharacterSettingsScreen.tsx` (Render quality selector), `PROJECT_STATUS.md`.
 - No files deleted.
 
+## Files created or modified (Phase 10)
+- Created: `src/types/memory.ts`, `src/hooks/useMemoryStore.ts`, `src/components/MemoryScreen.tsx`.
+- Modified: `src/App.tsx` (Memory route), `src/components/Sidebar.tsx` (Memory nav enabled, Workspace/Activity reasons updated, phase counter corrected), `src/App.css` (memory screen/form/card styling), `PROJECT_STATUS.md`.
+- No files deleted.
+
 ## Exact next action (requires approval before starting)
-Phase 10 — integration: connect approved memory/workspace/task APIs with verified permission boundaries and an audit trail (spec §14). Not started. This is the first phase that needs a real backend, and will likely raise several material-decision questions (which backend, what memory store, what permission model) before implementation.
+All ten spec-numbered phases now have at least an honest first pass. What's left is mostly: (a) choosing and connecting a real AI backend (unblocks real chat replies, TTS auto-speak, and would make Workspace/Activity meaningful), (b) the paused AI 3D art-generation retry once credit is available, and (c) real-hardware validation on the target laptop. None of these are scripted next steps in the spec's phase list — they're decisions for the user to prioritize. Awaiting direction on which to tackle first.

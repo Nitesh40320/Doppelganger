@@ -4,6 +4,7 @@ import { Sidebar, type ScreenId } from './components/Sidebar'
 import { CompanionScreen } from './components/CompanionScreen'
 import { CharacterSettingsScreen } from './components/CharacterSettingsScreen'
 import { WardrobeScreen } from './components/WardrobeScreen'
+import { MemoryScreen } from './components/MemoryScreen'
 import { useCharacterProfile } from './hooks/useCharacterProfile'
 
 function App() {
@@ -31,6 +32,7 @@ function App() {
         {activeScreen === 'wardrobe' && (
           <WardrobeScreen profile={profile} onChange={updateProfile} />
         )}
+        {activeScreen === 'memory' && <MemoryScreen />}
       </main>
     </div>
   )
