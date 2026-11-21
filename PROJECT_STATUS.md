@@ -1,7 +1,7 @@
 # Project Doppelgänger — Status
 
 ## Current phase
-**Phase 3 — mouse tracking.** Status: **WAITING** (implemented, tested, awaiting user approval to begin Phase 4).
+**Phase 4 — animation controller.** Status: **WAITING** (implemented, tested, awaiting user approval to begin Phase 5).
 
 ## User-approved future direction (not yet built)
 User shared a reference image (`Astra's Neon AI Companion Interface.png`) as the target look for the **final product**, and confirmed two things explicitly:
@@ -55,12 +55,34 @@ User shared a reference image (`Astra's Neon AI Companion Interface.png`) as the
   - `cursorGaze` toggle gating uses the identical conditional pattern already verified for `touchReactions`, but the visual effect itself (head rotation on a featureless placeholder sphere) can't be meaningfully confirmed by screenshot — there's no face/eyes to show gaze direction until the real character exists (Phase 5). Noted as a verification gap, not a known defect.
   - All dev servers and test artifacts cleaned up after verification.
 
-## Known errors
+## Known errors (Phase 3)
 None outstanding. (One real state-management bug — reaction never clearing — found and fixed during this phase.)
 
+## Completed tasks (Phase 4)
+- **State machine:** `src/types/companionState.ts` defines the eight states from spec §5's diagram (boot/idle/attention/listening/thinking/speaking/reaction/error), a priority ranking per state, and the allowed-transition graph. `src/hooks/useCompanionStateMachine.ts` exposes `requestTransition` (priority-gated — rejects a lower-priority interruption, e.g. a hover reaction can't interrupt speaking, matching the spec's own example) and `completeFrom` (for a state's own natural exit — a reaction's pulse finishing, speech ending — which bypasses the priority gate but only fires if the machine is still in the expected source state, guarding against a stale timer clobbering a newer state). `error` is reachable from any state as a special case (asset/service-failure safety net, character stays visible).
+- **Unified with Phase 3's reaction system:** removed `useAvatarReactions.ts` (now redundant) and routed hit-zone clicks through `requestTransition('reaction')` instead of a separate standalone cooldown timer — the state machine's own "can't re-enter the state you're already in" rule does that job now, which is more architecturally correct than two parallel mechanisms both claiming to represent "is a reaction playing."
+- **Hover now drives a real state** (`attention`) instead of only being read ad hoc by the gaze code; `AvatarViewport` bubbles stage hover up via a new `onStageHoverChange` callback.
+- **Visual cues per state** on the placeholder (`AvatarModel.tsx`): idle/attention get a very small procedural "breathing" scale oscillation (stands in for a real breathing clip); each state pulses the model's emissive glow differently (idle steady, listening/thinking/speaking at different rates, thinking in lavender to stay in-palette while being distinguishable, error in warning red) — all explicitly commented as a placeholder stand-in, not a claim that this is final facial/lip-sync behavior.
+- **Dev test harness:** since nothing in the app yet produces real `listening`/`thinking`/`speaking` triggers (that's chat in Phase 7, voice in Phase 8), added a clearly-labeled "DEV: STATE MACHINE TEST" panel with a "Simulate conversation turn" button (chains listening → thinking → speaking → idle with realistic delays) and "Force error / safe mode" / "Recover to idle" buttons. Labeled honestly as a developer tool that Phases 7–8 will replace, not presented as a working chat/voice feature.
+- A real lint-surfaced bug fixed along the way: `materials` from `useGLTF` is a shared, cached resource, and the glow-animation code was mutating it directly — on a React/eslint ruleset new enough to flag this (`react-hooks/immutability`, `react-hooks/refs`) as a correctness risk, since another component instance could share and be corrupted by that mutation. Fixed by cloning the material once after mount and swapping every mesh in the group onto the owned clone via `group.traverse`, rather than mutating the cached original.
+
+## Tests actually run and results (Phase 4)
+- `npx tsc -b` → clean.
+- `npx eslint .` → found and fixed three real issues before the final clean run: (1) a ref written unconditionally during render (`stateRef.current = state` moved into a `useEffect`); (2) the `materials`-mutation issue above; (3) an exhaustive-deps warning on an unmount cleanup effect (fixed by capturing the ref's array into a local variable inside the effect, since the array is mutated via `push` rather than reassigned, so capturing the reference once is correct).
+- `npm run build` → succeeds (same pre-existing bundle-size warning, still deferred to Phase 9).
+- Live Playwright verification against `npm run dev`, all in single atomic scripts to avoid tool-round-trip latency contaminating the timing (a real lesson learned mid-session — see below):
+  - BOOT → IDLE confirmed (state reads `BOOT` immediately after mount, `IDLE` ~600ms later).
+  - Full simulated turn confirmed: IDLE → LISTENING → THINKING → SPEAKING, each state reached exactly when expected.
+  - **Priority gate confirmed working exactly as spec §5 describes**: clicking a hit zone immediately after entering `SPEAKING` was rejected — state and status line stayed on "speaking," no reaction fired.
+  - **Error/safe-mode confirmed**: "Force error" correctly entered `SAFE MODE` from idle with the character still visible; a reaction click during `SAFE MODE` was correctly rejected (error has the highest priority); "Recover to idle" correctly returned to `IDLE`.
+  - One test-methodology mistake caught and corrected mid-session: an earlier attempt to verify the same priority gate by splitting waits/clicks across *separate* tool calls gave an inconsistent result, because real wall-clock time elapsing between calls (tool round-trip latency) let the simulated speaking duration legitimately expire before the click landed. Re-ran as a single atomic script and got a clean, trustworthy result — noted here so this isn't mistaken for a flaky app behavior later.
+  - All dev servers and test artifacts cleaned up after verification.
+
+## Known errors (Phase 4)
+None outstanding. (Three real lint-surfaced bugs found and fixed — see above.)
+
 ## Decisions awaiting user approval
-- Approval to proceed to Phase 4 (idle/listening/thinking/speaking/reaction animation state machine, per spec §5).
-- Character design modesty level for Phase 5–6 is now settled (see "User-approved future direction" above) — no longer a pending decision, recorded for when those phases start.
+- Approval to proceed to Phase 5 (Blender rig, facial shape keys, default outfit, P0 animation clips, exported to GLB — the first phase that touches the *real* character asset).
 - No other blocking decisions currently.
 
 ## Approved design/architecture decisions
@@ -74,9 +96,14 @@ None outstanding. (One real state-management bug — reaction never clearing —
 - No files deleted. No existing Blender scene content touched.
 
 ## Files created or modified (Phase 3)
-- Created: `src/types/interactionZones.ts`, `src/hooks/useAvatarReactions.ts`.
-- Modified: `src/components/AvatarModel.tsx` (gaze + per-zone pointer handlers + reaction-driven scale pulse), `src/components/AvatarViewport.tsx` (pointer-in-stage tracking, new props), `src/components/CompanionScreen.tsx` (reaction hook wiring, hover/status display, keyboard button row), `src/components/CharacterSettingsScreen.tsx` (live hint text, new Sound effects toggle), `src/types/characterProfile.ts` (`soundEffects` field), `src/App.css` (interact bar, canvas-wrap positioning), `PROJECT_STATUS.md` (this file).
+- Created: `src/types/interactionZones.ts`, `src/hooks/useAvatarReactions.ts` (superseded and removed in Phase 4).
+- Modified: `src/components/AvatarModel.tsx` (gaze + per-zone pointer handlers + reaction-driven scale pulse), `src/components/AvatarViewport.tsx` (pointer-in-stage tracking, new props), `src/components/CompanionScreen.tsx` (reaction hook wiring, hover/status display, keyboard button row), `src/components/CharacterSettingsScreen.tsx` (live hint text, new Sound effects toggle), `src/types/characterProfile.ts` (`soundEffects` field), `src/App.css` (interact bar, canvas-wrap positioning), `PROJECT_STATUS.md`.
 - No files deleted.
 
+## Files created or modified (Phase 4)
+- Created: `src/types/companionState.ts`, `src/hooks/useCompanionStateMachine.ts`.
+- Modified: `src/components/AvatarModel.tsx` (state-driven glow + breathing + owned-material clone fix), `src/components/AvatarViewport.tsx` (`companionState`/`reactionZoneId` props replacing the old `activeReaction` prop, new `onStageHoverChange` callback), `src/components/CompanionScreen.tsx` (state machine wiring, per-state status text, dev test panel), `src/App.css` (dev panel styling), `PROJECT_STATUS.md`.
+- Deleted: `src/hooks/useAvatarReactions.ts` — Phase 3's standalone reaction/cooldown hook, superseded by the unified state machine (its job is now done by the machine's own "can't re-enter the current state" rule). This is code I wrote in the previous phase of this same session, not user content; flagging it here per the project's "never delete without approval" rule even though it's a low-risk, git-tracked, same-session refactor.
+
 ## Exact next action (requires approval before starting)
-Phase 4 — idle/listening/thinking/speaking/reaction animation state machine, per spec §5 and §14. Not started.
+Phase 5 — Blender rig, facial shape keys, default Cyber Elegance outfit, P0 animation clips, exported to GLB, per spec §11 and §14. Not started.

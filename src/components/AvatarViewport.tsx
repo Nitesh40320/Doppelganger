@@ -3,7 +3,7 @@ import { Canvas } from '@react-three/fiber'
 import { Loader, OrbitControls } from '@react-three/drei'
 import { AvatarModel } from './AvatarModel'
 import { ViewportErrorBoundary } from './ViewportErrorBoundary'
-import type { ActiveReaction } from '../hooks/useAvatarReactions'
+import type { CompanionState } from '../types/companionState'
 import type { ZoneId } from '../types/interactionZones'
 
 function ViewportError() {
@@ -21,17 +21,21 @@ function ViewportError() {
 interface AvatarViewportProps {
   cursorGazeEnabled: boolean
   touchIntensity: number
-  activeReaction: ActiveReaction | null
+  companionState: CompanionState
+  reactionZoneId: ZoneId | null
   onZoneClick: (zoneId: ZoneId) => void
   onZoneHover: (zoneId: ZoneId | null) => void
+  onStageHoverChange: (hovering: boolean) => void
 }
 
 export function AvatarViewport({
   cursorGazeEnabled,
   touchIntensity,
-  activeReaction,
+  companionState,
+  reactionZoneId,
   onZoneClick,
   onZoneHover,
+  onStageHoverChange,
 }: AvatarViewportProps) {
   const [isPointerInStage, setIsPointerInStage] = useState(false)
 
@@ -39,10 +43,14 @@ export function AvatarViewport({
     <ViewportErrorBoundary fallback={<ViewportError />}>
       <div
         className="avatar-canvas-wrap"
-        onPointerEnter={() => setIsPointerInStage(true)}
+        onPointerEnter={() => {
+          setIsPointerInStage(true)
+          onStageHoverChange(true)
+        }}
         onPointerLeave={() => {
           setIsPointerInStage(false)
           onZoneHover(null)
+          onStageHoverChange(false)
         }}
       >
         <Canvas
@@ -59,7 +67,8 @@ export function AvatarViewport({
               cursorGazeEnabled={cursorGazeEnabled}
               isPointerInStage={isPointerInStage}
               touchIntensity={touchIntensity}
-              activeReaction={activeReaction}
+              companionState={companionState}
+              reactionZoneId={reactionZoneId}
               onZoneClick={onZoneClick}
               onZoneHover={onZoneHover}
             />
