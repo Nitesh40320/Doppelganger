@@ -91,7 +91,9 @@ export function CharacterSettingsScreen({
             checked={profile.cursorGaze}
             onChange={(e) => onChange({ cursorGaze: e.target.checked })}
           />
-          <span className="field-hint">Takes effect once eye/head tracking is built (Phase 3).</span>
+          <span className="field-hint">
+            Head tracks your cursor when it's over the companion stage (Phase 3).
+          </span>
         </label>
 
         <label className="field toggle-field">
@@ -101,7 +103,9 @@ export function CharacterSettingsScreen({
             checked={profile.touchReactions}
             onChange={(e) => onChange({ touchReactions: e.target.checked })}
           />
-          <span className="field-hint">Takes effect once touch-zone reactions are built (Phase 3).</span>
+          <span className="field-hint">
+            Click the head/hands on the companion stage for a brief reaction (Phase 3).
+          </span>
         </label>
 
         <label className="field">
@@ -115,6 +119,18 @@ export function CharacterSettingsScreen({
             onChange={(e) => onChange({ touchIntensity: Number(e.target.value) })}
           />
           <span className="field-hint">{profile.touchIntensity}%</span>
+        </label>
+
+        <label className="field toggle-field">
+          <span className="field-label">Sound effects</span>
+          <input
+            type="checkbox"
+            checked={profile.soundEffects}
+            onChange={(e) => onChange({ soundEffects: e.target.checked })}
+          />
+          <span className="field-hint">
+            No reaction sounds are wired up yet. This only stores your preference for later.
+          </span>
         </label>
 
         <label className="field toggle-field">

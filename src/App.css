@@ -267,10 +267,46 @@
   overflow: hidden;
 }
 
+.avatar-canvas-wrap {
+  position: absolute;
+  inset: 0;
+}
+
 .companion-stage canvas {
   display: block;
   width: 100% !important;
   height: 100% !important;
+}
+
+.interact-bar {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  z-index: 2;
+}
+
+.interact-bar button {
+  background: rgba(11, 15, 26, 0.85);
+  border: 1px solid var(--panel-border);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 6px 12px;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.interact-bar button:hover,
+.interact-bar button:focus-visible {
+  border-color: var(--cyan);
+  color: var(--text);
+  box-shadow: 0 0 10px var(--cyan-glow);
 }
 
 .hud-scanline {

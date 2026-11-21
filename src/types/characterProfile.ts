@@ -11,6 +11,7 @@ export interface CharacterProfile {
   cursorGaze: boolean
   touchReactions: boolean
   touchIntensity: number
+  soundEffects: boolean
   voiceActivation: VoiceActivationMode
   selectedOutfit: string
 }
@@ -24,6 +25,7 @@ export const DEFAULT_CHARACTER_PROFILE: CharacterProfile = {
   cursorGaze: true,
   touchReactions: true,
   touchIntensity: 50,
+  soundEffects: true,
   voiceActivation: 'push-to-talk',
   selectedOutfit: 'Cyber Elegance',
 }
