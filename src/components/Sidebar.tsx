@@ -25,6 +25,7 @@ export function Sidebar({ active, onSelect }: SidebarProps) {
   return (
     <nav className="sidebar">
       <div className="sidebar-title">DOPPELGÄNGER</div>
+      <div className="sidebar-subtitle">COMPANION INTERFACE</div>
       <ul className="sidebar-list">
         {NAV_ITEMS.map((item) => (
           <li key={item.id}>
@@ -41,6 +42,10 @@ export function Sidebar({ active, onSelect }: SidebarProps) {
           </li>
         ))}
       </ul>
+      <div className="sidebar-footer">
+        <span className="sidebar-pulse" aria-hidden="true" />
+        SYSTEM ONLINE — PHASE 02
+      </div>
     </nav>
   )
 }

@@ -11,8 +11,9 @@ Verified by: Claude Code, live session discovery (Phase 0 audit). This is a live
 - **Generators enabled:** none (tripo/hunyuan3d/hyper3d/meshy all off). No premium generators.
 - **Capabilities exposed:** `bpy_api_lookup`, `describe_node_type`, `execute_code`, `get_addon_info`, `get_object_info`, `get_scene_info`, `get_viewport_screenshot`, `get_world_state_snapshot`, `list_scene_items`, `pick_viewport_object`, plus telemetry/activity helpers.
 - **Risk classification:** `execute_code` = DESTRUCTIVE WRITE (arbitrary Python inside the user's Blender session — treat every script as privileged, save versioned `.blend` files before use). Scene/object queries and screenshots = READ-ONLY. Asset search via Poly Haven = EXTERNAL/NETWORK ACTION (downloads from a third party).
-- **Phases that may use it:** 5 (real character asset), optionally 2.
+- **Phases that may use it:** 5 (real character asset), used in Phase 2.
 - **Note:** 3D generation providers and Sketchfab/Poly Pizza are off — do not assume they're available. Only Poly Haven asset search is live.
+- **Used in Phase 2:** confirmed the live Blender session held only the default empty-scene content (one Cube, one Light, one Camera — no user work). Built six primitive meshes in a new collection (`HUD_Placeholder_v001`) alongside the untouched default objects (nothing deleted or overwritten), applied a translucent cyan placeholder material, and exported the selection to `src/assets/avatar/models/test/placeholder_hologram_v001.glb`. No `.blend` file was saved for this disposable test asset — intentional, since saving would have changed the live session's file identity, and this geometry is not part of the real `astra_vNNN.blend` asset pipeline (Phase 5).
 
 ### R3 MCP
 - **Status:** Connected as `claude362880@gmail.com`, app connection "Claude Code". API reachable.

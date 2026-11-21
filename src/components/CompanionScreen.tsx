@@ -1,4 +1,5 @@
 import type { CharacterProfile } from '../types/characterProfile'
+import { AvatarViewport } from './AvatarViewport'
 
 function resolveAddressPreview(profile: CharacterProfile): string {
   switch (profile.addressMode) {
@@ -18,23 +19,27 @@ interface CompanionScreenProps {
 export function CompanionScreen({ profile }: CompanionScreenProps) {
   return (
     <section className="companion-screen">
-      <div className="companion-stage">
-        <div className="companion-placeholder">
-          <p className="placeholder-label">3D avatar placeholder</p>
-          <p className="placeholder-detail">
-            The real-time rigged character loads here starting in Phase 2 (test model) and
-            Phase 5 (final character). Nothing 3D is connected yet.
-          </p>
+      <div className="companion-stage hud-frame">
+        <span className="hud-corner tl" />
+        <span className="hud-corner tr" />
+        <span className="hud-corner bl" />
+        <span className="hud-corner br" />
+        <div className="hud-scanline" aria-hidden="true" />
+        <div className="hud-telemetry hud-mono">
+          <span>ASSET: placeholder_hologram_v001.glb</span>
+          <span>STATUS: TEST RENDER — NOT FINAL CHARACTER</span>
         </div>
+        <AvatarViewport />
       </div>
-      <div className="companion-status">
+      <div className="companion-status hud-frame-soft">
         <p>
           {profile.characterName} will call you{' '}
           <strong>{resolveAddressPreview(profile)}</strong>.
         </p>
         <p className="placeholder-note">
-          Keyboard chat and voice are not implemented yet (Phases 7–8). This screen only
-          reflects your saved Character Settings.
+          This is a placeholder test figure verifying the Blender → GLB → React Three Fiber
+          pipeline (Phase 2). The real character arrives in Phase 5. Keyboard chat and voice
+          are not implemented yet (Phases 7–8).
         </p>
       </div>
     </section>
