@@ -1,7 +1,7 @@
 # Project Doppelgänger — Status
 
 ## Current phase
-**Phase 6 — wardrobe.** Status: **WAITING** (implemented, tested, awaiting user approval to begin Phase 7).
+**Phase 7 — keyboard chat.** Status: **WAITING** (implemented, tested, awaiting user approval to begin Phase 8).
 
 ## Scope decision for Phase 5 (confirmed with user before starting)
 A fully sculpted, production-quality adult anime face/body — the "high-quality 3D anime
@@ -141,8 +141,29 @@ None outstanding.
 ## Known errors (Phase 6)
 None outstanding. (One real architectural bug — screen navigation resetting companion state — found during scoping and fixed before building the feature that depended on it being fixed.)
 
+## Completed tasks (Phase 7)
+- **Adapter architecture** (`src/adapters/chatAdapter.ts`): a `ChatAdapter` interface (`sendMessage(text, signal) -> Promise<{ok:true,reply} | {ok:false,error}>`), matching the spec's explicit ask for swappable providers (§6/§9) so a real backend is a one-line swap later, not a UI rewrite. `notConnectedChatAdapter.ts` is the current implementation — it makes no network call, fabricates no reply, and always honestly returns "no AI backend is connected yet" after a short delay (long enough to make the loading state real and visible, not instant). This matches the spec's own Definition of Done for this phase (§16): "Keyboard chat UI is functional, even if AI backend integration is scheduled for a later phase."
+- **`useChat` hook**: manages message history and an `AbortController`-based in-flight request, wired to the *same* Phase 4 state-machine instance (`requestTransition`/`completeFrom` passed in, not a separate copy) — sending a message requests `thinking`, a successful reply would complete to `speaking` (never exercised today since the adapter always errors), and an error or cancellation completes back to `idle`, matching the state diagram's own "THINKING → IDLE (request cancelled or failed)" transition exactly.
+- **`ChatComposer`**: Enter sends, Shift+Enter inserts a newline, Escape clears the draft if there's text or cancels an in-flight send if not (spec §6's three required composer behaviors, all real). A disabled Mic button is shown with an honest tooltip/label ("Voice input arrives in Phase 8") rather than omitted or faked.
+- **`ChatLog`**: renders user/assistant/system messages with distinct styling (error messages get a visibly different red-tinted treatment), an animated "thinking…" bubble while a request is in flight, auto-scrolls to the newest message, and uses `role="log"`/`aria-live="polite"` for accessibility.
+- Wired into `CompanionScreen.tsx` between the status panel and the dev test panel. Updated the dev panel's own label to clarify that chat now drives real `THINKING`, while `LISTENING`/`SPEAKING` still need voice (Phase 8) and an actual backend to occur for real — the simulate button remains useful for exercising those until then.
+
+## Tests actually run and results (Phase 7)
+- `npx tsc -b` / `npx eslint .` → clean, no new issues this phase.
+- `npm run build` → succeeds (same pre-existing bundle-size warning, deferred to Phase 9).
+- Live Playwright verification against `npm run dev`, zero console errors throughout:
+  - Typed a message, pressed Enter: user bubble appeared immediately, `STATE: THINKING` and a "thinking…" bubble appeared, and after the adapter's delay the honest "No AI backend is connected yet" system error appeared (red-tinted) with state correctly returning to `IDLE`.
+  - Shift+Enter confirmed to insert a literal newline in the draft rather than sending.
+  - Escape confirmed to clear a non-empty draft first; confirmed separately (empty draft, message already sent and in flight) to cancel the in-flight request — state returned to `IDLE` immediately, and after waiting past when the (cancelled) adapter would have resolved, confirmed **no** error message appeared for that cancelled message — the dropped response is truly dropped, not silently shown later.
+  - Mic button confirmed disabled via accessibility snapshot, with the honest label "Voice input (not yet available)".
+  - **Verified the state-machine integration is correctly decoupled where it should be**: forced `SAFE MODE` (highest priority), then sent a chat message — confirmed the visual state correctly stayed `SAFE MODE` throughout (the `thinking` request was correctly rejected by the priority gate) while the message was still genuinely processed and answered (the honest error still appeared in the chat log) — chat functionality isn't blocked by avatar animation state, but it also doesn't wrongly override a higher-priority animation.
+  - Dev server and test screenshots cleaned up after verification.
+
+## Known errors (Phase 7)
+None outstanding.
+
 ## Decisions awaiting user approval
-- Approval to proceed to Phase 7 (Keyboard chat UI connected to a backend adapter, per spec §14).
+- Approval to proceed to Phase 8 (push-to-talk STT, response TTS, mute/stop, lip-sync — per spec §14, likely the phase where choosing an actual STT/TTS provider becomes a material decision requiring a check-in).
 - No other blocking decisions currently.
 
 ## Approved design/architecture decisions
@@ -175,5 +196,10 @@ None outstanding. (One real architectural bug — screen navigation resetting co
 - Modified: `src/App.tsx` (Companion screen now always-mounted/CSS-hidden instead of conditionally unmounted — the architectural fix), `src/components/Sidebar.tsx` (Wardrobe nav enabled, phase counter corrected), `src/components/CharacterSettingsScreen.tsx` (outfit hint text), `src/App.css` (wardrobe grid/card styling), `PROJECT_STATUS.md`.
 - No files deleted.
 
+## Files created or modified (Phase 7)
+- Created: `src/types/chat.ts`, `src/adapters/chatAdapter.ts`, `src/adapters/notConnectedChatAdapter.ts`, `src/hooks/useChat.ts`, `src/components/ChatComposer.tsx`, `src/components/ChatLog.tsx`.
+- Modified: `src/components/CompanionScreen.tsx` (chat wiring, updated status/dev-panel copy), `src/App.css` (chat panel/log/bubble/composer styling), `PROJECT_STATUS.md`.
+- No files deleted.
+
 ## Exact next action (requires approval before starting)
-Phase 7 — keyboard chat UI connected to a backend adapter (spec §6 and §14). Not started.
+Phase 8 — push-to-talk STT, response TTS, mute/stop, lip-sync (spec §6 and §14). Not started. Likely to raise a provider-choice question before implementation, since STT/TTS vendor selection is an explicit material decision per spec §19.2/§20.6.

@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CharacterProfile } from '../types/characterProfile'
 import { AvatarViewport } from './AvatarViewport'
+import { ChatComposer } from './ChatComposer'
+import { ChatLog } from './ChatLog'
 import { useCompanionStateMachine } from '../hooks/useCompanionStateMachine'
+import { useChat } from '../hooks/useChat'
+import { notConnectedChatAdapter } from '../adapters/notConnectedChatAdapter'
 import { INTERACTION_ZONES, REACTION_DURATION_MS, type ZoneId } from '../types/interactionZones'
 
 const SIMULATED_LISTEN_MS = 1200
@@ -32,6 +36,11 @@ const STATE_LABELS: Record<string, string> = {
 
 export function CompanionScreen({ profile }: { profile: CharacterProfile }) {
   const { state, requestTransition, completeFrom } = useCompanionStateMachine()
+  const { messages, isSending, sendMessage, cancelSend } = useChat({
+    adapter: notConnectedChatAdapter,
+    requestTransition,
+    completeFrom,
+  })
   const [hoveredZone, setHoveredZone] = useState<ZoneId | null>(null)
   const [reactionZone, setReactionZone] = useState<ZoneId | null>(null)
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([])
@@ -94,16 +103,16 @@ export function CompanionScreen({ profile }: { profile: CharacterProfile }) {
   if (reactionLine) {
     statusLine = `${profile.characterName} ${reactionLine}`
   } else if (state === 'listening') {
-    statusLine = `${profile.characterName} is listening… (simulated — real voice input arrives in Phase 8)`
+    statusLine = `${profile.characterName} is listening… (dev-simulated — real voice input arrives in Phase 8)`
   } else if (state === 'thinking') {
-    statusLine = `${profile.characterName} is thinking… (simulated — no AI backend is connected yet)`
+    statusLine = `${profile.characterName} is thinking about your message…`
   } else if (state === 'speaking') {
-    statusLine = `${profile.characterName} is speaking… (simulated — no voice/TTS is connected yet)`
+    statusLine = `${profile.characterName} is speaking… (no voice/TTS is connected yet)`
   } else if (state === 'error') {
     statusLine = 'Safe mode: something in the simulated pipeline failed. The companion stays visible and usable.'
   } else {
     statusLine =
-      'This is the real rigged character with her first animation clips (Phase 5) — base body, default Cyber Elegance outfit, and basic facial shape keys. Final sculpted art, more outfits, and richer expressions are later passes. Keyboard chat and voice are not implemented yet (Phases 7–8).'
+      'This is the real rigged character with her first animation clips (Phase 5) — base body, default Cyber Elegance outfit, and basic facial shape keys. Keyboard chat below is fully wired up, but no AI backend is connected yet, so every message honestly gets a "not connected" reply. Voice input isn\'t implemented yet (Phase 8).'
   }
 
   return (
@@ -146,8 +155,16 @@ export function CompanionScreen({ profile }: { profile: CharacterProfile }) {
         </p>
         <p className="placeholder-note">{statusLine}</p>
       </div>
+      <div className="chat-panel hud-frame-soft">
+        <ChatLog messages={messages} isSending={isSending} characterName={profile.characterName} />
+        <ChatComposer isSending={isSending} onSend={sendMessage} onCancel={cancelSend} />
+      </div>
       <div className="dev-state-panel hud-frame-soft hud-mono">
-        <span className="dev-state-label">DEV: STATE MACHINE TEST (Phases 7–8 will replace these)</span>
+        <span className="dev-state-label">
+          DEV: STATE MACHINE TEST — sending a chat message above now drives real THINKING,
+          but always ends in an honest "no backend" error; LISTENING/SPEAKING still need
+          voice (Phase 8) and a connected backend to trigger for real
+        </span>
         <div className="dev-state-buttons">
           <button type="button" onClick={simulateConversationTurn}>
             Simulate conversation turn
