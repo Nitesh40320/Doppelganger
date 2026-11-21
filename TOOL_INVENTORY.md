@@ -51,8 +51,10 @@ Verified by: Claude Code, live session discovery (Phase 0 audit). This is a live
 - Node v24.9.0 / npm 11.6.0 — confirmed installed, used for the existing Vite/React app. READ/REVERSIBLE WRITE (local dev only).
 - Git — **not yet initialized** in `D:\crazy_idea` (`git status` reports "not a git repository"). Needs `git init` + remote add once the user provides the repo URL. EXTERNAL/NETWORK ACTION once a remote push happens — ask before pushing.
 
+## Corrections to this inventory (discovered during Phase 1)
+- **Playwright MCP is connected.** The Phase 0 pass below incorrectly reported no browser-automation MCP; it was actually available and was used in Phase 1 to drive a real browser against the dev server (navigate, fill forms, read console, verify reload persistence). Tools: `browser_navigate`, `browser_click`, `browser_fill_form`, `browser_snapshot`, `browser_console_messages`, `browser_close`, and others. Risk classification: READ-ONLY for inspection (snapshot/console/screenshot); REVERSIBLE WRITE for page interaction (click/type/fill) since it only drives the local dev server, nothing external.
+
 ## Not installed / not found in this session
-- No Playwright MCP or other browser-automation MCP detected — do not assume it exists for later browser testing; a `run`/`playwright-cli` skill path exists instead and will be used if needed.
 - No STT/TTS provider, no backend (FastAPI or otherwise), no database — all to be chosen/built in later phases per spec §6/§9.
 
 ## Recommended tool map (subject to phase-by-phase confirmation)
