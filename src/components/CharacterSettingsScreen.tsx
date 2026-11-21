@@ -1,4 +1,5 @@
 import { ADDRESS_MODE_OPTIONS, type CharacterProfile } from '../types/characterProfile'
+import { QUALITY_PRESETS, type QualityPreset } from '../types/qualityPreset'
 
 interface CharacterSettingsScreenProps {
   profile: CharacterProfile
@@ -163,6 +164,21 @@ export function CharacterSettingsScreen({
             device. No audio is stored or sent anywhere else by this app.
           </span>
         </div>
+
+        <label className="field toggle-field">
+          <span className="field-label">Render quality</span>
+          <select
+            value={profile.qualityPreset}
+            onChange={(e) => onChange({ qualityPreset: e.target.value as QualityPreset })}
+          >
+            {(Object.keys(QUALITY_PRESETS) as QualityPreset[]).map((key) => (
+              <option key={key} value={key}>
+                {QUALITY_PRESETS[key].label}
+              </option>
+            ))}
+          </select>
+          <span className="field-hint">{QUALITY_PRESETS[profile.qualityPreset].description}</span>
+        </label>
       </div>
 
       <button type="button" className="reset-button" onClick={onReset}>

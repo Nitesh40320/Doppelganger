@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import type { CharacterProfile } from '../types/characterProfile'
-import { AvatarViewport } from './AvatarViewport'
 import { ChatComposer } from './ChatComposer'
 import { ChatLog } from './ChatLog'
 import { useCompanionStateMachine } from '../hooks/useCompanionStateMachine'
@@ -11,6 +10,15 @@ import { notConnectedChatAdapter } from '../adapters/notConnectedChatAdapter'
 import { webSpeechSttAdapter } from '../adapters/webSpeechSttAdapter'
 import { webSpeechTtsAdapter } from '../adapters/webSpeechTtsAdapter'
 import { INTERACTION_ZONES, REACTION_DURATION_MS, type ZoneId } from '../types/interactionZones'
+
+// Code-split the 3D viewport: three.js/R3F/drei/postprocessing are the bulk
+// of this app's JS weight (spec Sec10: "large first load"). This still loads
+// right away since Phase 6 keeps the Companion screen mounted at all times,
+// but splitting it into its own chunk lets the lightweight app shell parse
+// and paint without waiting on ~1MB of 3D library code first.
+const AvatarViewport = lazy(() =>
+  import('./AvatarViewport').then((m) => ({ default: m.AvatarViewport })),
+)
 
 const SIMULATED_LISTEN_MS = 1200
 const SIMULATED_THINK_MS = 1400
@@ -51,6 +59,20 @@ export function CompanionScreen({ profile, isActiveScreen }: CompanionScreenProp
   const [hoveredZone, setHoveredZone] = useState<ZoneId | null>(null)
   const [reactionZone, setReactionZone] = useState<ZoneId | null>(null)
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([])
+  const [isTabVisible, setIsTabVisible] = useState(!document.hidden)
+
+  // Spec Sec10: "pause or reduce render loop when tab/window is hidden;
+  // resume safely" - combined with isActiveScreen, this fully stops the R3F
+  // frame loop (see AvatarViewport's frameloop prop) whenever the avatar
+  // isn't actually visible, for either reason.
+  useEffect(() => {
+    function handleVisibilityChange() {
+      setIsTabVisible(!document.hidden)
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [])
+  const isRenderActive = isActiveScreen && isTabVisible
 
   const voiceOutput = useVoiceOutput({ adapter: webSpeechTtsAdapter })
 
@@ -200,15 +222,19 @@ export function CompanionScreen({ profile, isActiveScreen }: CompanionScreenProp
           {hoveredZoneLabel && <span>ZONE: {hoveredZoneLabel.toUpperCase()}</span>}
           {voiceInput.isListening && <span className="hud-mic-indicator">● MIC ACTIVE</span>}
         </div>
-        <AvatarViewport
-          touchIntensity={profile.touchIntensity}
-          companionState={state}
-          reactionZoneId={reactionZone}
-          isSpeakingLive={voiceOutput.isSpeaking}
-          onZoneClick={handleZoneClick}
-          onZoneHover={setHoveredZone}
-          onStageHoverChange={handleStageHoverChange}
-        />
+        <Suspense fallback={<div className="viewport-status-overlay hud-mono">LOADING 3D ENGINE…</div>}>
+          <AvatarViewport
+            touchIntensity={profile.touchIntensity}
+            companionState={state}
+            reactionZoneId={reactionZone}
+            isSpeakingLive={voiceOutput.isSpeaking}
+            qualityPreset={profile.qualityPreset}
+            isRenderActive={isRenderActive}
+            onZoneClick={handleZoneClick}
+            onZoneHover={setHoveredZone}
+            onStageHoverChange={handleStageHoverChange}
+          />
+        </Suspense>
         <div className="interact-bar hud-mono" role="group" aria-label="Keyboard-accessible interactions">
           <button type="button" onClick={() => handleZoneClick('head')}>
             Pat head

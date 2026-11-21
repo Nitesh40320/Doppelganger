@@ -1,7 +1,7 @@
 # Project Doppelgänger — Status
 
 ## Current phase
-**Phase 8 — voice pipeline.** Status: **WAITING** (implemented, tested, awaiting user approval to begin Phase 9).
+**Phase 9 — performance pass.** Status: **WAITING** (implemented, tested, awaiting user approval to begin Phase 10).
 
 ## Provider decision for Phase 8 (confirmed with user before starting)
 Asked the user to choose between: (a) the browser-native Web Speech API (free, no backend, works today, but inconsistent cross-browser support and Chrome sends audio to Google's servers for recognition), (b) building the pipeline with the provider stubbed out, or (c) holding for a paid cloud provider + the backend server needed to keep its API key off the frontend. They chose (a). Everything below uses Web Speech API (`SpeechRecognition` + `SpeechSynthesis`) as the live adapter implementation, with the Chrome/Google privacy caveat disclosed directly in Character Settings, not buried.
@@ -197,9 +197,30 @@ None outstanding.
 ## Known errors (Phase 8)
 None outstanding. (Two real bugs — the circular dependency, caught before writing it, and the stale-ref state-machine chaining bug, caught by live testing — found and fixed this phase; see debugging notes above.)
 
+## Completed tasks (Phase 9)
+- **Code-split the 3D viewport**: `AvatarViewport` (and everything it imports — three.js, R3F, drei, postprocessing) now loads via `React.lazy`/`Suspense` instead of being part of the main bundle. Measured effect: the main entry chunk dropped from ~1.26 MB to 246 KB (77 KB gzipped); the 3D library code now lives in its own ~1.13 MB chunk that loads in parallel rather than blocking the app shell's parse/paint. Directly addresses spec §10's "large first load" and "long startup" mitigations. The 3D chunk itself is still large because three.js/R3F/drei/postprocessing genuinely are that size — splitting moves the weight out of the critical path, it doesn't make the underlying libraries smaller; further reduction (tree-shaking individual three.js modules, a lighter post-processing path) is a further, more invasive effort not attempted here.
+- **Render-loop pausing** (spec §10: "pause or reduce render loop when tab/window is hidden; resume safely"): `AvatarViewport`'s `Canvas` now sets `frameloop="never"` whenever the Companion screen isn't the active screen *or* the browser tab is hidden (`document.visibilitychange`), and `"always"` otherwise. This stops all `requestAnimationFrame` activity, GPU work, and the animation mixer/lip-sync/blink logic entirely while not visible — not just a cosmetic CSS hide, as it was before this phase (a gap Phase 6's "always mounted" fix had introduced without addressing).
+- **Quality presets** (`qualityPreset: 'low' | 'balanced' | 'high'`, new `CharacterProfile` field, defaults to `'balanced'` per spec's explicit recommendation): controls pixel-ratio range and antialiasing per spec §10's preset table, plus a subtle Bloom post-processing effect (via the already-installed-but-previously-unused `@react-three/postprocessing`) exclusive to High, synergizing with the existing emissive state-glow material. **No preset enables real-time shadows** — a deliberate interpretation given the target hardware has no dedicated GPU and shadow mapping is one of the more expensive features to add back in; documented here rather than left implicit.
+- Added a "Render quality" selector to Character Settings, persisted through the same mechanism as every other setting since Phase 1.
+- Confirmed already-compliant items from spec §10 needed no new work: the avatar was never pre-rendered as video (real rig + real clips throughout), a loading screen with progress feedback already existed (drei's `<Loader />`, built in Phase 2), and there's nothing to "dispose on outfit swap" yet since Wardrobe (Phase 6) only has one real outfit — revisit when a second one exists.
+
+## Tests actually run and results (Phase 9)
+- `npx tsc -b` / `npx eslint .` → clean, no new issues.
+- `npm run build` → succeeds; confirmed the chunk split numerically (see above) rather than assuming the `React.lazy` call worked.
+- Live Playwright verification against `npm run dev`, zero console errors throughout:
+  - **Proved the render-loop pausing with hard measurements, not inference**: instrumented `window.requestAnimationFrame` via an init script before the app loaded, to count actual rAF calls. Confirmed ~63 calls/second while the Companion screen is active, and **exactly 0** for a full second immediately after switching to Character Settings. Separately simulated the tab being backgrounded (mocked `document.hidden` + dispatched `visibilitychange`) and confirmed the same: 0 frames while "hidden", resumed correctly (122 frames, catching up) once restored.
+  - Confirmed the quality-preset selector switches cleanly between Low/Balanced/High at runtime with zero console errors on each change (the `Canvas` fully re-configures dpr/antialias/frameloop/bloom without crashing).
+  - Visually confirmed the Bloom effect actually renders in High (soft glow halos around the brightest specular highlights, absent in Low) rather than just trusting the prop was set.
+  - Confirmed `qualityPreset` persists through `localStorage` the same way every other setting does.
+  - Dev server and test screenshots cleaned up after verification.
+- **Honestly out of scope**: this was all verified in a standard dev-machine Chromium instance. No actual profiling or stability testing happened on the spec's named target hardware (a 16 GB RAM, Intel-integrated-graphics Windows laptop) — I don't have access to that specific machine from this session. The acceptance criterion "stable on target laptop under realistic use" is **not yet independently confirmed on real target hardware**; what's been verified is that the mechanisms (code-splitting, frameloop pausing, preset switching) function correctly in principle.
+
+## Known errors (Phase 9)
+None outstanding.
+
 ## Decisions awaiting user approval
-- Approval to proceed to Phase 9 (performance pass: Low/Balanced/High presets, profiling, asset optimization — per spec §10/§14. The ~1.25 MB JS bundle warning, flagged since Phase 2, becomes directly relevant here).
-- No other blocking decisions currently.
+- Approval to proceed to Phase 10 (integration: connect approved memory/workspace/task APIs, per spec §14 — the first phase requiring real backend infrastructure and permission-boundary design).
+- Open item, not blocking: real-hardware validation on the actual target laptop hasn't happened (see above) — flagging in case the user wants to test on their own machine and report back before Phase 10, though not required to proceed.
 
 ## Approved design/architecture decisions
 - Visual direction: Iron Man/JARVIS-style HUD chrome (corner brackets, scanlines, grid background, mono telemetry readouts) layered onto the existing dark-navy/cyan palette from Phase 1 — user-requested, applied this phase.
@@ -241,5 +262,10 @@ None outstanding. (Two real bugs — the circular dependency, caught before writ
 - Modified: `src/hooks/useChat.ts` (`onAssistantReply` hook for future TTS auto-speak, `addSystemMessage` export), `src/hooks/useCompanionStateMachine.ts` (the stale-ref chaining fix), `src/components/AvatarModel.tsx` (live lip-sync + periodic blink), `src/components/AvatarViewport.tsx` (`isSpeakingLive` prop), `src/components/ChatComposer.tsx` (now a controlled component, Mic button live), `src/components/CompanionScreen.tsx` (voice wiring, Ctrl+Space, speaking bar, TTS test button), `src/components/CharacterSettingsScreen.tsx` (voice-activation hint + new privacy note), `src/App.tsx` (`isActiveScreen` prop), `src/App.css` (mic/speaking-bar styling), `PROJECT_STATUS.md`.
 - No files deleted.
 
+## Files created or modified (Phase 9)
+- Created: `src/types/qualityPreset.ts`.
+- Modified: `src/types/characterProfile.ts` (`qualityPreset` field), `src/components/AvatarViewport.tsx` (lazy-load boundary moved to its call site, preset-driven dpr/antialias/bloom, `frameloop` control), `src/components/CompanionScreen.tsx` (tab-visibility tracking, `React.lazy` import, Suspense fallback), `src/components/CharacterSettingsScreen.tsx` (Render quality selector), `PROJECT_STATUS.md`.
+- No files deleted.
+
 ## Exact next action (requires approval before starting)
-Phase 9 — performance pass: Low/Balanced/High quality presets, profiling, and asset optimization (spec §10 and §14). Not started.
+Phase 10 — integration: connect approved memory/workspace/task APIs with verified permission boundaries and an audit trail (spec §14). Not started. This is the first phase that needs a real backend, and will likely raise several material-decision questions (which backend, what memory store, what permission model) before implementation.

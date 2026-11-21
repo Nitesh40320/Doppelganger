@@ -1,3 +1,5 @@
+import type { QualityPreset } from './qualityPreset'
+
 export type AddressMode = 'name' | 'master' | 'boss' | 'dear' | 'custom'
 
 export type VoiceActivationMode = 'push-to-talk' | 'always-on'
@@ -14,6 +16,7 @@ export interface CharacterProfile {
   soundEffects: boolean
   voiceActivation: VoiceActivationMode
   selectedOutfit: string
+  qualityPreset: QualityPreset
 }
 
 export const DEFAULT_CHARACTER_PROFILE: CharacterProfile = {
@@ -28,6 +31,7 @@ export const DEFAULT_CHARACTER_PROFILE: CharacterProfile = {
   soundEffects: true,
   voiceActivation: 'push-to-talk',
   selectedOutfit: 'Cyber Elegance',
+  qualityPreset: 'balanced',
 }
 
 export const ADDRESS_MODE_OPTIONS: { value: AddressMode; label: string }[] = [
